@@ -30,13 +30,14 @@ export type LedgerReason =
   | "exercise_logged"
   | "quest_completed"
   | "streak_bonus"
-  | "reward_purchase";
+  | "reward_purchase"
+  | "manual_adjustment";
 
 export type LedgerEntry = {
   id: string;
   amount: number;
   reason: LedgerReason;
-  sourceType: "login" | "workout" | "workout_entry" | "quest" | "reward";
+  sourceType: "login" | "workout" | "workout_entry" | "quest" | "reward" | "manual";
   sourceId: string;
   createdAt: string;
 };
@@ -57,7 +58,7 @@ export type Reward = {
   name: string;
   description: string;
   cost: number;
-  type: "title" | "badge" | "theme" | "custom";
+  type: "title" | "badge" | "theme" | "avatar_item" | "custom";
   metadata: Record<string, string>;
   isActive: boolean;
 };

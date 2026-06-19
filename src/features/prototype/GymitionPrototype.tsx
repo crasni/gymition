@@ -1,14 +1,20 @@
 "use client";
 
 import {
+  ArrowRight,
+  CalendarDays,
   Check,
   CircleDollarSign,
+  Dumbbell,
   Flame,
   Gift,
+  Pencil,
   Plus,
+  Save,
   ShoppingBag,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
@@ -58,6 +64,29 @@ const defaultDraftEntry: DraftEntry = {
   distanceMeters: 0,
   notes: "",
 };
+
+const motivationalQuotes = [
+  {
+    line: "先完成今天的一組，其他的交給節奏。",
+    note: "把第一個動作記下來，訓練就已經開始了。",
+  },
+  {
+    line: "不用每次都很猛，但要讓自己有紀錄。",
+    note: "穩定累積的重量、次數和時間，會比感覺更誠實。",
+  },
+  {
+    line: "今天的你，只需要贏過沒有開始的版本。",
+    note: "小一點也沒關係，先把訓練清單填起來。",
+  },
+  {
+    line: "身體會記得你重複做過的事。",
+    note: "完成訓練後，金幣、XP 和任務會自動結算。",
+  },
+  {
+    line: "把動作做乾淨，比把版面填滿更重要。",
+    note: "一次記一個動作，讓今天的訓練清楚可追蹤。",
+  },
+] as const;
 
 export function GymitionPrototype({ initialView }: { initialView: AppView }) {
   const [state, setState] = useState(createInitialState);
@@ -245,6 +274,16 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(freshState));
   }
 
+  function saveProfile(username: string) {
+    setState((current) => ({
+      ...current,
+      user: {
+        ...current.user,
+        username,
+      },
+    }));
+  }
+
   return (
     <AppShell
       activeView={initialView}
@@ -260,11 +299,8 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
           level={level}
           questProgress={questProgress}
           recentLedger={recentLedger}
-          ownedRewardIds={ownedRewardIds}
           onClaimDailyReward={claimDailyReward}
-          onPurchaseReward={purchaseReward}
           dailyClaimed={state.user.lastLoginRewardDate === localDateKey()}
-          equippedReward={equippedReward}
         />
       )}
 
@@ -300,6 +336,7 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
           level={level}
           equippedReward={equippedReward}
           ownedRewardIds={ownedRewardIds}
+          onSaveProfile={saveProfile}
         />
       )}
     </AppShell>
@@ -311,56 +348,68 @@ function DashboardView({
   level,
   questProgress,
   recentLedger,
-  ownedRewardIds,
   onClaimDailyReward,
-  onPurchaseReward,
   dailyClaimed,
-  equippedReward,
 }: {
   state: GymitionState;
   level: number;
   questProgress: ReturnType<typeof calculateQuestProgress>;
   recentLedger: LedgerEntry[];
-  ownedRewardIds: Set<string>;
   onClaimDailyReward: () => void;
-  onPurchaseReward: (reward: Reward) => void;
   dailyClaimed: boolean;
-  equippedReward?: Reward;
 }) {
+  const completedQuestCount = questProgress.filter((item) => item.completed).length;
+  const totalQuestCount = dailyQuests.length;
+  const quote = motivationalQuotes[getDailyQuoteIndex(localDateKey())];
+
   return (
-    <div className="dashboard-grid">
-      <section className="stat-strip">
-        <StatTile label="金幣" value={state.user.coins.toString()} icon={<CircleDollarSign size={19} />} />
-        <StatTile label="XP 等級" value={`等級 ${level}`} icon={<Sparkles size={19} />} />
-        <StatTile label="連續天數" value={`${state.user.currentStreak} 天`} icon={<Flame size={19} />} />
+    <div className="home-layout">
+      <section className="hero-command">
+        <div className="hero-copy">
+          <span className="today-line">今日訓練提醒</span>
+          <h2>{quote.line}</h2>
+          <p>{quote.note}</p>
+        </div>
+        <div className="hero-actions">
+          <a className="start-workout-action" href="/workout">
+            <Dumbbell size={20} aria-hidden />
+            開始訓練
+            <ArrowRight size={18} aria-hidden />
+          </a>
+          <button className="daily-reward-row" type="button" onClick={onClaimDailyReward} disabled={dailyClaimed}>
+            <Gift size={20} aria-hidden />
+            <span>
+              <strong>{dailyClaimed ? "每日獎勵已領取" : "領取每日獎勵"}</strong>
+              <small>
+                {dailyClaimed
+                  ? "明天再回來延續連續天數"
+                  : `+${REWARD_RULES.dailyLogin.coins} 金幣、+${REWARD_RULES.dailyLogin.xp} XP`}
+              </small>
+            </span>
+          </button>
+        </div>
       </section>
 
-      <div className="dashboard-columns">
-        <div className="dashboard-main-column">
-          <section className="panel daily-panel">
-            <div>
-              <p className="section-label">每日獎勵</p>
-              <h2>{dailyClaimed ? "今天已領取" : "領取今日啟動獎勵"}</h2>
-              <p>
-                {dailyClaimed
-                  ? "明天再回來延續連續天數。"
-                  : `獲得 ${REWARD_RULES.dailyLogin.coins} 金幣、${REWARD_RULES.dailyLogin.xp} XP，並計算連續登入加成。`}
-              </p>
-            </div>
-            <button className="primary-action" type="button" onClick={onClaimDailyReward} disabled={dailyClaimed}>
-              <Gift size={18} aria-hidden />
-              {dailyClaimed ? "已領取" : "領取獎勵"}
-            </button>
-          </section>
+      <section className="status-strip" aria-label="目前進度">
+        <StatTile label="金幣" value={state.user.coins.toString()} icon={<CircleDollarSign size={19} />} />
+        <StatTile label="等級" value={`${level}`} icon={<Sparkles size={19} />} />
+        <StatTile label="連續" value={`${state.user.currentStreak} 天`} icon={<Flame size={19} />} />
+      </section>
 
-          <section className="panel activity-panel">
-            <p className="section-label">近期獎勵事件</p>
-            <h2>金幣與 XP 紀錄</h2>
+      <div className="workbench-grid">
+        <div className="workbench-main">
+          <section className="activity-panel">
+            <div className="section-heading">
+              <div>
+                <p className="section-label">最近活動</p>
+                <h2>最近獎勵</h2>
+              </div>
+            </div>
             <div className="ledger-list">
               {recentLedger.length === 0 ? (
-                <p className="empty-copy">領取獎勵或完成訓練後，這裡會顯示紀錄。</p>
+                <p className="empty-copy">尚無紀錄。</p>
               ) : (
-                recentLedger.map((entry) => (
+                recentLedger.slice(0, 3).map((entry) => (
                   <div className="ledger-row" key={entry.id}>
                     <span>{ledgerReasonLabel(entry.reason)}</span>
                     <strong>{entry.amount > 0 ? `+${entry.amount}` : entry.amount}</strong>
@@ -371,13 +420,14 @@ function DashboardView({
           </section>
         </div>
 
-        <div className="dashboard-side-column">
-          <section className="panel">
-            <div className="section-heading">
-          <div>
-            <p className="section-label">今日任務</p>
-            <h2>自動結算目標</h2>
-          </div>
+        <aside className="today-rail">
+          <section className="today-panel">
+            <div className="rail-heading">
+              <div>
+                <p className="section-label">今日任務</p>
+                <h2>{completedQuestCount}/{totalQuestCount} 已完成</h2>
+              </div>
+              <CalendarDays size={18} aria-hidden />
             </div>
             <div className="quest-list">
               {dailyQuests.map((quest) => {
@@ -385,10 +435,10 @@ function DashboardView({
                 const value = Math.min(progress?.progress ?? 0, quest.targetValue);
                 const percent = Math.round((value / quest.targetValue) * 100);
                 return (
-                  <div className="quest-row" key={quest.id}>
+                  <div className={progress?.completed ? "quest-row done" : "quest-row"} key={quest.id}>
+                    <div className="quest-check">{progress?.completed ? <Check size={15} aria-hidden /> : null}</div>
                     <div>
                       <strong>{quest.name}</strong>
-                      <span>{quest.description}</span>
                     </div>
                     <div className="quest-progress">
                       <span>
@@ -397,36 +447,13 @@ function DashboardView({
                       <div className="meter compact">
                         <span style={{ width: `${percent}%` }} />
                       </div>
-                      {progress?.rewarded && <Check size={17} aria-label="已獲得獎勵" />}
                     </div>
                   </div>
                 );
               })}
             </div>
           </section>
-
-          <section className="panel reward-preview">
-            <p className="section-label">商店預覽</p>
-            <h2>{equippedReward ? equippedReward.name : "第一個可兌換獎勵"}</h2>
-            <p>
-              {equippedReward
-                ? "已顯示在個人檔案。"
-                : "花費金幣不會影響永久 XP 進度。"}
-            </p>
-            {seedRewards.slice(0, 2).map((reward) => (
-              <button
-                className="shop-row"
-                key={reward.id}
-                type="button"
-                disabled={ownedRewardIds.has(reward.id) || state.user.coins < reward.cost}
-                onClick={() => onPurchaseReward(reward)}
-              >
-                <span>{reward.name}</span>
-                <strong>{ownedRewardIds.has(reward.id) ? "已擁有" : `${reward.cost} 金幣`}</strong>
-              </button>
-            ))}
-          </section>
-        </div>
+        </aside>
       </div>
     </div>
   );
@@ -451,118 +478,51 @@ function WorkoutView({
   onRemoveEntry: (entryId: string) => void;
   onCompleteWorkout: () => void;
 }) {
+  const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false);
   const selectedExercise = exercises.find((exercise) => exercise.id === draftEntry.exerciseId) ?? exercises[0];
 
+  function submitEntry() {
+    onAddEntry();
+    setIsAddExerciseOpen(false);
+  }
+
   return (
-    <div className="two-column">
-      <section className="panel">
-        <p className="section-label">動作紀錄</p>
-        <h2>新增一組訓練內容</h2>
-        <div className="form-grid">
-          <label>
-            動作
-            <select
-              value={draftEntry.exerciseId}
-              onChange={(event) =>
-                setDraftEntry((current) => ({ ...current, exerciseId: event.target.value }))
-              }
-            >
-              {exercises.map((exercise) => (
-                <option key={exercise.id} value={exercise.id}>
-                  {exercise.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {usesSets(selectedExercise) && (
-            <label>
-              組數
-              <input
-                min="1"
-                type="number"
-                value={draftEntry.sets}
-                onChange={(event) =>
-                  setDraftEntry((current) => ({ ...current, sets: Number(event.target.value) }))
-                }
-              />
-            </label>
-          )}
-
-          {usesReps(selectedExercise) && (
-            <label>
-              次數
-              <input
-                min="1"
-                type="number"
-                value={draftEntry.reps}
-                onChange={(event) =>
-                  setDraftEntry((current) => ({ ...current, reps: Number(event.target.value) }))
-                }
-              />
-            </label>
-          )}
-
-          {selectedExercise.measurementType === "reps_weight" && (
-            <label>
-              重量
-              <input
-                min="0"
-                type="number"
-                value={draftEntry.weight}
-                onChange={(event) =>
-                  setDraftEntry((current) => ({ ...current, weight: Number(event.target.value) }))
-                }
-              />
-            </label>
-          )}
-
-          {selectedExercise.measurementType === "duration" && (
-            <label>
-              分鐘
-              <input
-                min="1"
-                type="number"
-                value={draftEntry.durationMinutes}
-                onChange={(event) =>
-                  setDraftEntry((current) => ({ ...current, durationMinutes: Number(event.target.value) }))
-                }
-              />
-            </label>
-          )}
-
-          <label className="wide-field">
-            備註
-            <input
-              value={draftEntry.notes}
-              onChange={(event) =>
-                setDraftEntry((current) => ({ ...current, notes: event.target.value }))
-              }
-              placeholder="選填"
-            />
-          </label>
+    <div className="workout-layout">
+      <section className="workout-toolbar">
+        <div>
+          <p className="section-label">目前訓練</p>
+          <h2>{draftEntries.length === 0 ? "準備開始紀錄" : `已加入 ${draftEntries.length} 個動作`}</h2>
         </div>
-        <button className="primary-action" type="button" onClick={onAddEntry}>
-          <Plus size={18} aria-hidden />
+        <button className="round-add-action" type="button" onClick={() => setIsAddExerciseOpen(true)}>
+          <Plus size={20} aria-hidden />
           新增動作
         </button>
       </section>
 
-      <section className="panel">
-        <p className="section-label">目前訓練</p>
-        <h2>已紀錄 {draftEntries.length} 個動作</h2>
-        <div className="entry-list">
+      <section className="workout-list-surface">
+        <div className="workout-list-head">
+          <span>動作</span>
+          <span>內容</span>
+          <span>獎勵</span>
+          <span aria-hidden />
+        </div>
+        <div className="entry-list workout-entry-list">
           {draftEntries.length === 0 ? (
-            <p className="empty-copy">至少新增一個動作後才能完成訓練。</p>
+            <button className="empty-workout-row" type="button" onClick={() => setIsAddExerciseOpen(true)}>
+              <Plus size={20} aria-hidden />
+              <strong>加入第一個動作</strong>
+            </button>
           ) : (
             draftEntries.map((entry) => {
               const exercise = exercises.find((item) => item.id === entry.exerciseId);
               return (
-                <div className="entry-row" key={entry.id}>
-                  <div>
+                <div className="workout-entry-row" key={entry.id}>
+                  <div className="workout-entry-main">
+                    {exercise && <span className="item-type-badge">{categoryLabel(exercise.category)}</span>}
                     <strong>{exercise?.name}</strong>
-                    <span>{formatEntry(entry)}</span>
                   </div>
+                  <span>{formatEntry(entry)}</span>
+                  <span>+{entry.coinsEarned} 金幣 / +{entry.xpEarned} XP</span>
                   <button
                     className="icon-button"
                     type="button"
@@ -577,6 +537,10 @@ function WorkoutView({
           )}
         </div>
         {lastSummary && <p className="success-copy">{lastSummary}</p>}
+      </section>
+
+      <div className="workout-footer">
+        <span>{draftEntries.length === 0 ? "尚未加入動作" : "完成後會自動結算金幣、XP 與任務。"}</span>
         <button
           className="complete-action"
           type="button"
@@ -585,40 +549,196 @@ function WorkoutView({
         >
           完成訓練
         </button>
-      </section>
+      </div>
+
+      {isAddExerciseOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="add-exercise-title">
+            <div className="modal-head">
+              <div>
+                <p className="section-label">新增動作</p>
+                <h2 id="add-exercise-title">紀錄一個訓練項目</h2>
+              </div>
+              <button className="icon-button" type="button" aria-label="關閉" onClick={() => setIsAddExerciseOpen(false)}>
+                <X size={16} aria-hidden />
+              </button>
+            </div>
+
+            <div className="form-grid">
+              <label>
+                動作
+                <select
+                  value={draftEntry.exerciseId}
+                  onChange={(event) =>
+                    setDraftEntry((current) => ({ ...current, exerciseId: event.target.value }))
+                  }
+                >
+                  {exercises.map((exercise) => (
+                    <option key={exercise.id} value={exercise.id}>
+                      {exercise.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {usesSets(selectedExercise) && (
+                <label>
+                  組數
+                  <input
+                    min="1"
+                    type="number"
+                    value={draftEntry.sets}
+                    onChange={(event) =>
+                      setDraftEntry((current) => ({ ...current, sets: Number(event.target.value) }))
+                    }
+                  />
+                </label>
+              )}
+
+              {usesReps(selectedExercise) && (
+                <label>
+                  次數
+                  <input
+                    min="1"
+                    type="number"
+                    value={draftEntry.reps}
+                    onChange={(event) =>
+                      setDraftEntry((current) => ({ ...current, reps: Number(event.target.value) }))
+                    }
+                  />
+                </label>
+              )}
+
+              {selectedExercise.measurementType === "reps_weight" && (
+                <label>
+                  重量
+                  <input
+                    min="0"
+                    type="number"
+                    value={draftEntry.weight}
+                    onChange={(event) =>
+                      setDraftEntry((current) => ({ ...current, weight: Number(event.target.value) }))
+                    }
+                  />
+                </label>
+              )}
+
+              {selectedExercise.measurementType === "duration" && (
+                <label>
+                  分鐘
+                  <input
+                    min="1"
+                    type="number"
+                    value={draftEntry.durationMinutes}
+                    onChange={(event) =>
+                      setDraftEntry((current) => ({ ...current, durationMinutes: Number(event.target.value) }))
+                    }
+                  />
+                </label>
+              )}
+
+              <label className="wide-field">
+                備註
+                <input
+                  value={draftEntry.notes}
+                  onChange={(event) =>
+                    setDraftEntry((current) => ({ ...current, notes: event.target.value }))
+                  }
+                  placeholder="選填"
+                />
+              </label>
+            </div>
+
+            <div className="modal-actions">
+              <button className="ghost-light-action" type="button" onClick={() => setIsAddExerciseOpen(false)}>
+                取消
+              </button>
+              <button className="primary-action" type="button" onClick={submitEntry}>
+                <Plus size={18} aria-hidden />
+                加入清單
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
 
 function HistoryView({ workouts, exercises }: { workouts: WorkoutSession[]; exercises: Exercise[] }) {
+  const completedWorkouts = [...workouts].reverse();
+  const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
+
   return (
-    <section className="panel full-panel">
-      <p className="section-label">已完成訓練</p>
-      <h2>歷史紀錄</h2>
-      <div className="history-list">
-        {workouts.length === 0 ? (
-          <p className="empty-copy">完成訓練後會顯示在這裡。</p>
-        ) : (
-          [...workouts].reverse().map((workout) => (
-            <article className="history-row" key={workout.id}>
-              <div>
-                <strong>{workout.completedAt ? formatShortDate(workout.completedAt) : "草稿"}</strong>
-                <span>
-                  {workout.entries
-                    .map((entry) => exercises.find((exercise) => exercise.id === entry.exerciseId)?.name)
-                    .filter(Boolean)
-                    .join(", ")}
-                </span>
-              </div>
-              <div className="history-rewards">
-                <span>+{workout.totalCoinsEarned} 金幣</span>
-                <span>+{workout.totalXpEarned} XP</span>
-              </div>
-            </article>
-          ))
-        )}
-      </div>
-    </section>
+    <div className="history-layout">
+      <section className="history-list-surface">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">已完成訓練</p>
+            <h2>歷史紀錄</h2>
+          </div>
+        </div>
+        <div className="history-list">
+          {completedWorkouts.length === 0 ? (
+            <p className="empty-copy">完成訓練後會顯示在這裡。</p>
+          ) : (
+            completedWorkouts.map((workout) => {
+              const expanded = workout.id === expandedWorkoutId;
+              return (
+                <article className={expanded ? "history-record expanded" : "history-record"} key={workout.id}>
+                  <div className="history-row">
+                    <div className="history-row-main">
+                      <strong>{workout.completedAt ? formatShortDate(workout.completedAt) : "草稿"}</strong>
+                      <span>
+                        {workout.entries
+                          .map((entry) => exercises.find((exercise) => exercise.id === entry.exerciseId)?.name)
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
+                    </div>
+                    <div className="history-rewards">
+                      <span>+{workout.totalCoinsEarned} 金幣</span>
+                      <span>+{workout.totalXpEarned} XP</span>
+                    </div>
+                    <button
+                      className="detail-toggle"
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() => setExpandedWorkoutId(expanded ? null : workout.id)}
+                    >
+                      {expanded ? "收合" : "詳情"}
+                    </button>
+                  </div>
+                  {expanded && (
+                    <div className="inline-history-detail">
+                      <div className="detail-summary">
+                        <span>{workout.entries.length} 個動作</span>
+                        <span>+{workout.totalCoinsEarned} 金幣</span>
+                        <span>+{workout.totalXpEarned} XP</span>
+                      </div>
+                      <div className="detail-entry-list">
+                        {workout.entries.map((entry) => {
+                          const exercise = exercises.find((item) => item.id === entry.exerciseId);
+                          return (
+                            <div className="detail-entry-row" key={entry.id}>
+                              <div className="detail-entry-main">
+                                <strong>{exercise?.name}</strong>
+                                <span>{exercise ? categoryLabel(exercise.category) : ""}</span>
+                              </div>
+                              <span className="detail-entry-value">{formatEntry(entry)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -634,28 +754,41 @@ function RewardsView({
   onPurchaseReward: (reward: Reward) => void;
 }) {
   return (
-    <section className="reward-grid">
-      {rewards.map((reward) => {
-        const owned = ownedRewardIds.has(reward.id);
-        return (
-          <article className="panel reward-card" key={reward.id}>
-            <div className="reward-icon">
-              <ShoppingBag size={22} aria-hidden />
+    <section className="shop-container">
+      <div className="shop-head">
+        <div>
+          <p className="section-label">獎勵商店</p>
+          <h2>用金幣換一點訓練樂趣</h2>
+        </div>
+        <strong>{coins} 金幣</strong>
+      </div>
+      <div className="shop-list">
+        {rewards.map((reward) => {
+          const owned = ownedRewardIds.has(reward.id);
+          return (
+            <div className="shop-item-row" key={reward.id}>
+              <div className="shop-item-copy">
+                <div className="shop-item-title">
+                  <span className="item-type-badge">{rewardTypeLabel(reward.type)}</span>
+                  <strong>{reward.name}</strong>
+                </div>
+                <p>{reward.description}</p>
+              </div>
+              <div className="shop-item-action">
+                <strong>{reward.cost} 金幣</strong>
+                <button
+                  className="primary-action compact-action"
+                  type="button"
+                  disabled={owned || coins < reward.cost}
+                  onClick={() => onPurchaseReward(reward)}
+                >
+                  {owned ? "已擁有" : "兌換"}
+                </button>
+              </div>
             </div>
-            <p className="section-label">{rewardTypeLabel(reward.type)}</p>
-            <h2>{reward.name}</h2>
-            <p>{reward.description}</p>
-            <button
-              className="complete-action"
-              type="button"
-              disabled={owned || coins < reward.cost}
-              onClick={() => onPurchaseReward(reward)}
-            >
-              {owned ? "已擁有" : `${reward.cost} 金幣`}
-            </button>
-          </article>
-        );
-      })}
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -665,30 +798,129 @@ function ProfileView({
   level,
   equippedReward,
   ownedRewardIds,
+  onSaveProfile,
 }: {
   state: GymitionState;
   level: number;
   equippedReward?: Reward;
   ownedRewardIds: Set<string>;
+  onSaveProfile: (username: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState(state.user.username);
+  const ownedRewards = seedRewards.filter((reward) => ownedRewardIds.has(reward.id));
+
+  function cancelEdit() {
+    setUsernameDraft(state.user.username);
+    setIsEditing(false);
+  }
+
+  function saveEdit() {
+    const nextName = usernameDraft.trim();
+    if (nextName) {
+      onSaveProfile(nextName);
+    }
+    setIsEditing(false);
+  }
+
   return (
-    <div className="two-column">
-      <section className="panel profile-card">
-        <div className="avatar">{state.user.username.slice(0, 2).toUpperCase()}</div>
-        <p className="section-label">本地使用者</p>
-        <h2>{state.user.username}</h2>
-        <p>{equippedReward?.metadata.title ?? "尚未裝備稱號"}</p>
+    <div className="player-profile">
+      <section className="profile-hero">
+        <div className="player-avatar">{state.user.username.slice(0, 2).toUpperCase()}</div>
+        <div className="player-identity">
+          <p className="section-label">玩家檔案</p>
+          {isEditing ? (
+            <label className="profile-name-field">
+              顯示名稱
+              <input
+                value={usernameDraft}
+                onChange={(event) => setUsernameDraft(event.target.value)}
+                autoFocus
+              />
+            </label>
+          ) : (
+            <>
+              <h2>{state.user.username}</h2>
+              <p>{equippedReward?.metadata.title ?? "尚未裝備稱號"}</p>
+            </>
+          )}
+        </div>
+        <div className="profile-actions">
+          {isEditing ? (
+            <>
+              <button className="ghost-light-action" type="button" onClick={cancelEdit}>
+                <X size={16} aria-hidden />
+                取消
+              </button>
+              <button className="primary-action compact-action" type="button" onClick={saveEdit}>
+                <Save size={16} aria-hidden />
+                儲存
+              </button>
+            </>
+          ) : (
+            <button className="ghost-light-action" type="button" onClick={() => setIsEditing(true)}>
+              <Pencil size={16} aria-hidden />
+              編輯
+            </button>
+          )}
+        </div>
       </section>
-      <section className="panel">
-        <p className="section-label">進度</p>
-        <h2>Phase 0 個人狀態</h2>
-        <div className="profile-stats">
-          <span>等級 {level}</span>
+
+      <section className="profile-progression">
+        <div>
+          <p className="section-label">角色進度</p>
+          <h2>等級 {level}</h2>
+        </div>
+        <div className="profile-level-meter">
+          <div className="meter compact">
+            <span style={{ width: `${Math.min(100, state.user.xp % 100)}%` }} />
+          </div>
           <span>{state.user.xp} XP</span>
-          <span>{state.user.coins} 金幣</span>
-          <span>連續 {state.user.currentStreak} 天</span>
-          <span>完成 {state.workouts.length} 次訓練</span>
-          <span>擁有 {ownedRewardIds.size} 個獎勵</span>
+        </div>
+      </section>
+
+      <section className="profile-stat-lanes" aria-label="個人統計">
+        <div>
+          <span>金幣</span>
+          <strong>{state.user.coins}</strong>
+        </div>
+        <div>
+          <span>連續天數</span>
+          <strong>{state.user.currentStreak}</strong>
+        </div>
+        <div>
+          <span>完成訓練</span>
+          <strong>{state.workouts.length}</strong>
+        </div>
+        <div>
+          <span>收藏獎勵</span>
+          <strong>{ownedRewardIds.size}</strong>
+        </div>
+      </section>
+
+      <section className="profile-inventory">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">展示櫃</p>
+            <h2>已擁有獎勵</h2>
+          </div>
+        </div>
+        <div className="inventory-list">
+          {ownedRewards.length === 0 ? (
+            <p className="empty-copy">還沒有兌換獎勵。先完成訓練累積金幣。</p>
+          ) : (
+            ownedRewards.map((reward) => (
+              <div className="inventory-row" key={reward.id}>
+                <div className="reward-icon">
+                  <ShoppingBag size={18} aria-hidden />
+                </div>
+                <div>
+                  <strong>{reward.name}</strong>
+                  <span>{rewardTypeLabel(reward.type)}</span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </div>
@@ -710,7 +942,7 @@ function createInitialState(): GymitionState {
     user: {
       id: "local_user",
       email: "you@gymition.local",
-      username: "本地訓練者",
+      username: "Crasni",
       coins: 0,
       xp: 0,
       currentStreak: 0,
@@ -770,6 +1002,25 @@ function usesReps(exercise: Exercise) {
   return exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only";
 }
 
+function getDailyQuoteIndex(dateKey: string) {
+  return [...dateKey].reduce((total, character) => total + character.charCodeAt(0), 0) % motivationalQuotes.length;
+}
+
+function categoryLabel(category: Exercise["category"]) {
+  const labels: Record<Exercise["category"], string> = {
+    chest: "胸部",
+    back: "背部",
+    legs: "腿部",
+    shoulders: "肩膀",
+    arms: "手臂",
+    core: "核心",
+    cardio: "有氧",
+    mobility: "活動度",
+  };
+
+  return labels[category];
+}
+
 function formatEntry(entry: WorkoutEntry) {
   if (entry.durationSeconds) {
     return `${Math.round(entry.durationSeconds / 60)} 分鐘`;
@@ -791,6 +1042,7 @@ function ledgerReasonLabel(reason: LedgerReason) {
     quest_completed: "完成任務",
     streak_bonus: "連續天數加成",
     reward_purchase: "兌換獎勵",
+    manual_adjustment: "手動調整",
   };
 
   return labels[reason];
@@ -799,8 +1051,9 @@ function ledgerReasonLabel(reason: LedgerReason) {
 function rewardTypeLabel(type: Reward["type"]) {
   const labels: Record<Reward["type"], string> = {
     title: "稱號",
-    badge: "徽章",
+    badge: "勛章",
     theme: "主題",
+    avatar_item: "造型",
     custom: "自訂",
   };
 

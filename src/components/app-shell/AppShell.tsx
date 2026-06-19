@@ -63,7 +63,6 @@ export function AppShell({
           </div>
           <div>
             <p className="brand-name">Gymition</p>
-            <p className="brand-caption">Phase 0 本地版</p>
           </div>
         </div>
 
@@ -96,14 +95,14 @@ export function AppShell({
 
         <button className="ghost-action" type="button" onClick={onReset}>
           <RotateCcw size={16} aria-hidden />
-          重置資料
+          重置示範資料
         </button>
       </aside>
 
       <main className="main-shell">
         <header className="topbar">
           <div>
-            <p className="eyebrow">個人健身獎勵系統</p>
+            <p className="eyebrow">Gymition</p>
             <h1>{activeViewLabel(activeView)}</h1>
           </div>
           <div className="topbar-stats" aria-label="目前個人狀態">
