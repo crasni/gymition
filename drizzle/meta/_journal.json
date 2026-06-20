@@ -8,6 +8,13 @@
       "when": 1781877263891,
       "tag": "0000_phase1_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781880710392,
+      "tag": "0001_daily_checkins_weekly_goals",
+      "breakpoints": true
     }
   ]
 }

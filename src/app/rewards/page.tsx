@@ -1,5 +1,7 @@
-import { GymitionPrototype } from "@/features/prototype/GymitionPrototype";
+import { GymitionApp } from "@/features/app/GymitionApp";
 
-export default function RewardsPage() {
-  return <GymitionPrototype initialView="rewards" />;
+export const dynamic = "force-dynamic";
+
+export default async function RewardsPage() {
+  return <GymitionApp view="rewards" />;
 }

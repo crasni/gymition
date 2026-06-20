@@ -1,9 +1,13 @@
+import { config } from "dotenv";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { seedExercises } from "../src/features/exercises/seed-exercises";
 import { dailyQuests } from "../src/features/quests/quest-rules";
 import { seedRewards } from "../src/features/rewards/reward-service";
 import * as schema from "../src/db/schema";
+
+config({ path: ".env.local" });
+config();
 
 const databaseUrl = process.env.DATABASE_URL;
 

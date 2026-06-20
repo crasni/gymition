@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  CheckCircle2,
   CircleDollarSign,
   Dumbbell,
   Flame,
@@ -16,7 +17,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell/AppShell";
 import {
   calculateStreakBonus,
@@ -29,6 +31,7 @@ import type {
   GymitionState,
   LedgerEntry,
   LedgerReason,
+  Quest,
   Reward,
   WorkoutEntry,
   WorkoutSession,
@@ -43,6 +46,31 @@ import { createId } from "@/lib/ids";
 
 type AppView = "dashboard" | "workout" | "history" | "rewards" | "profile";
 
+type ServerActions = {
+  claimDailyReward?: () => Promise<DailyCheckinSummary>;
+  completeWorkout?: (input: {
+    entries: Array<{
+      exerciseId: string;
+      sets?: number;
+      reps?: number;
+      weight?: number;
+      durationSeconds?: number;
+      distanceMeters?: number;
+      notes?: string;
+    }>;
+  }) => Promise<void>;
+  purchaseReward?: (input: { rewardId: string }) => Promise<void>;
+  updateProfile?: (input: { username: string }) => Promise<void>;
+  setWeeklyGoal?: (input: { workoutTarget: number; cardioTarget: number }) => Promise<void>;
+};
+
+type DailyCheckinSummary = {
+  coins: number;
+  xp: number;
+  streak: number;
+  streakBonus: number;
+};
+
 type DraftEntry = {
   exerciseId: string;
   sets: number;
@@ -52,8 +80,6 @@ type DraftEntry = {
   distanceMeters: number;
   notes: string;
 };
-
-const STORAGE_KEY = "gymition.phase0.state";
 
 const defaultDraftEntry: DraftEntry = {
   exerciseId: seedExercises[0].id,
@@ -88,49 +114,94 @@ const motivationalQuotes = [
   },
 ] as const;
 
-export function GymitionPrototype({ initialView }: { initialView: AppView }) {
-  const [state, setState] = useState(createInitialState);
-  const [hydrated, setHydrated] = useState(false);
-  const [draftEntry, setDraftEntry] = useState(defaultDraftEntry);
+export function GymitionPrototype({
+  initialView,
+  initialState,
+  exercises = seedExercises,
+  quests = dailyQuests,
+  rewards = seedRewards,
+  actions = {},
+}: {
+  initialView: AppView;
+  initialState?: GymitionState;
+  exercises?: Exercise[];
+  quests?: Quest[];
+  rewards?: Reward[];
+  actions?: ServerActions;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [localState, setLocalState] = useState(createInitialState());
+  const state = initialState ?? localState;
+  const [draftEntry, setDraftEntry] = useState({
+    ...defaultDraftEntry,
+    exerciseId: exercises[0]?.id ?? defaultDraftEntry.exerciseId,
+  });
   const [draftEntries, setDraftEntries] = useState<WorkoutEntry[]>([]);
   const [lastSummary, setLastSummary] = useState<string | null>(null);
+  const [dailyCheckinSummary, setDailyCheckinSummary] = useState<DailyCheckinSummary | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
-    window.setTimeout(() => {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setState(JSON.parse(stored) as GymitionState);
-      }
-      setHydrated(true);
-    }, 0);
-  }, []);
-
-  useEffect(() => {
-    if (hydrated) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!dailyCheckinSummary) {
+      return;
     }
-  }, [hydrated, state]);
+
+    const timeout = window.setTimeout(() => setDailyCheckinSummary(null), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [dailyCheckinSummary]);
+
+  useEffect(() => {
+    if (!actionError) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setActionError(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [actionError]);
 
   const questProgress = useMemo(
-    () => calculateQuestProgress(state, dailyQuests, seedExercises),
-    [state],
+    () => calculateQuestProgress(state, quests, exercises),
+    [exercises, quests, state],
   );
   const recentLedger = [...state.coinLedger, ...state.xpLedger]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 8);
   const level = levelFromXp(state.user.xp);
   const ownedRewardIds = new Set(state.userRewards.map((reward) => reward.rewardId));
-  const equippedReward = seedRewards.find((reward) =>
+  const equippedReward = rewards.find((reward) =>
     state.userRewards.some((userReward) => userReward.rewardId === reward.id && userReward.equippedAt),
   );
 
+  function runServerAction(action: () => Promise<void>) {
+    startTransition(async () => {
+      try {
+        setActionError(null);
+        await action();
+        router.refresh();
+      } catch {
+        setActionError("操作沒有完成，請再試一次。");
+      }
+    });
+  }
+
   function claimDailyReward() {
+    if (actions.claimDailyReward) {
+      runServerAction(async () => {
+        const summary = await actions.claimDailyReward?.();
+        if (summary) {
+          setDailyCheckinSummary(summary);
+        }
+      });
+      return;
+    }
+
     const today = localDateKey();
     if (state.user.lastLoginRewardDate === today) {
       return;
     }
 
-    setState((current) => {
+    setLocalState((current) => {
       const nextStreak = nextLoginStreak(current.user.lastLoginRewardDate, current.user.currentStreak);
       const streakBonus = calculateStreakBonus(nextStreak);
       const coinLedger: LedgerEntry[] = [
@@ -157,7 +228,7 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
   }
 
   function addDraftEntry() {
-    const exercise = seedExercises.find((item) => item.id === draftEntry.exerciseId);
+    const exercise = exercises.find((item) => item.id === draftEntry.exerciseId);
     if (!exercise) {
       return;
     }
@@ -184,7 +255,26 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
       return;
     }
 
-    setState((current) => {
+    if (actions.completeWorkout) {
+      runServerAction(async () => {
+        await actions.completeWorkout?.({
+          entries: draftEntries.map((entry) => ({
+            exerciseId: entry.exerciseId,
+            sets: entry.sets,
+            reps: entry.reps,
+            weight: entry.weight,
+            durationSeconds: entry.durationSeconds,
+            distanceMeters: entry.distanceMeters,
+            notes: entry.notes,
+          })),
+        });
+        setLastSummary("訓練完成。");
+        setDraftEntries([]);
+      });
+      return;
+    }
+
+    setLocalState((current) => {
       const now = new Date().toISOString();
       const workoutId = createId("workout");
       const exerciseCoins = draftEntries.reduce((total, entry) => total + entry.coinsEarned, 0);
@@ -241,11 +331,18 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
   }
 
   function purchaseReward(reward: Reward) {
+    if (actions.purchaseReward) {
+      runServerAction(async () => {
+        await actions.purchaseReward?.({ rewardId: reward.id });
+      });
+      return;
+    }
+
     if (state.user.coins < reward.cost || ownedRewardIds.has(reward.id)) {
       return;
     }
 
-    setState((current) => ({
+    setLocalState((current) => ({
       ...current,
       user: {
         ...current.user,
@@ -267,19 +364,49 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
   }
 
   function resetDemo() {
+    if (initialState) {
+      router.refresh();
+      return;
+    }
+
     const freshState = createInitialState();
-    setState(freshState);
+    setLocalState(freshState);
     setDraftEntries([]);
     setLastSummary(null);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(freshState));
   }
 
   function saveProfile(username: string) {
-    setState((current) => ({
+    if (actions.updateProfile) {
+      runServerAction(async () => {
+        await actions.updateProfile?.({ username });
+      });
+      return;
+    }
+
+    setLocalState((current) => ({
       ...current,
       user: {
         ...current.user,
         username,
+      },
+    }));
+  }
+
+  function setWeeklyGoal(input: { workoutTarget: number; cardioTarget: number }) {
+    if (actions.setWeeklyGoal) {
+      runServerAction(async () => {
+        await actions.setWeeklyGoal?.(input);
+      });
+      return;
+    }
+
+    setLocalState((current) => ({
+      ...current,
+      weeklyGoal: {
+        id: "local_weekly_goal",
+        weekStart: localDateKey(),
+        workoutTarget: input.workoutTarget,
+        cardioTarget: input.cardioTarget,
       },
     }));
   }
@@ -292,6 +419,7 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
       streak={state.user.currentStreak}
       username={state.user.username}
       onReset={resetDemo}
+      resetLabel={initialState ? "重新整理資料" : "重置示範資料"}
     >
       {initialView === "dashboard" && (
         <DashboardView
@@ -300,7 +428,10 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
           questProgress={questProgress}
           recentLedger={recentLedger}
           onClaimDailyReward={claimDailyReward}
-          dailyClaimed={state.user.lastLoginRewardDate === localDateKey()}
+          dailyClaimed={state.user.lastLoginRewardDate === localDateKey() || isPending}
+          quests={quests}
+          onSetWeeklyGoal={setWeeklyGoal}
+          goalPending={isPending}
         />
       )}
 
@@ -308,7 +439,7 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
         <WorkoutView
           draftEntry={draftEntry}
           draftEntries={draftEntries}
-          exercises={seedExercises}
+          exercises={exercises}
           lastSummary={lastSummary}
           setDraftEntry={setDraftEntry}
           onAddEntry={addDraftEntry}
@@ -319,11 +450,11 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
         />
       )}
 
-      {initialView === "history" && <HistoryView workouts={state.workouts} exercises={seedExercises} />}
+      {initialView === "history" && <HistoryView workouts={state.workouts} exercises={exercises} />}
 
       {initialView === "rewards" && (
         <RewardsView
-          rewards={seedRewards}
+          rewards={rewards}
           coins={state.user.coins}
           ownedRewardIds={ownedRewardIds}
           onPurchaseReward={purchaseReward}
@@ -336,8 +467,30 @@ export function GymitionPrototype({ initialView }: { initialView: AppView }) {
           level={level}
           equippedReward={equippedReward}
           ownedRewardIds={ownedRewardIds}
+          rewards={rewards}
           onSaveProfile={saveProfile}
         />
+      )}
+      {dailyCheckinSummary && (
+        <div className="checkin-toast" role="status" aria-live="polite">
+          <div className="checkin-toast-icon">
+            <CheckCircle2 size={28} aria-hidden />
+          </div>
+          <div>
+            <strong>簽到完成</strong>
+            <span>
+              +{dailyCheckinSummary.coins} 金幣 · +{dailyCheckinSummary.xp} XP · 連續 {dailyCheckinSummary.streak} 天
+            </span>
+          </div>
+        </div>
+      )}
+      {actionError && (
+        <div className="checkin-toast error" role="status" aria-live="polite">
+          <div>
+            <strong>操作失敗</strong>
+            <span>{actionError}</span>
+          </div>
+        </div>
       )}
     </AppShell>
   );
@@ -350,6 +503,9 @@ function DashboardView({
   recentLedger,
   onClaimDailyReward,
   dailyClaimed,
+  quests,
+  onSetWeeklyGoal,
+  goalPending,
 }: {
   state: GymitionState;
   level: number;
@@ -357,9 +513,12 @@ function DashboardView({
   recentLedger: LedgerEntry[];
   onClaimDailyReward: () => void;
   dailyClaimed: boolean;
+  quests: Quest[];
+  onSetWeeklyGoal: (input: { workoutTarget: number; cardioTarget: number }) => void;
+  goalPending: boolean;
 }) {
   const completedQuestCount = questProgress.filter((item) => item.completed).length;
-  const totalQuestCount = dailyQuests.length;
+  const totalQuestCount = quests.length;
   const quote = motivationalQuotes[getDailyQuoteIndex(localDateKey())];
 
   return (
@@ -398,6 +557,13 @@ function DashboardView({
 
       <div className="workbench-grid">
         <div className="workbench-main">
+          <WeeklyGoalPanel
+            key={`${state.weeklyGoal?.id ?? "new"}:${state.weeklyGoal?.workoutTarget ?? 0}:${state.weeklyGoal?.cardioTarget ?? 0}`}
+            state={state}
+            onSetWeeklyGoal={onSetWeeklyGoal}
+            pending={goalPending}
+          />
+
           <section className="activity-panel">
             <div className="section-heading">
               <div>
@@ -430,10 +596,11 @@ function DashboardView({
               <CalendarDays size={18} aria-hidden />
             </div>
             <div className="quest-list">
-              {dailyQuests.map((quest) => {
+              {quests.map((quest) => {
                 const progress = questProgress.find((item) => item.questId === quest.id);
                 const value = Math.min(progress?.progress ?? 0, quest.targetValue);
                 const percent = Math.round((value / quest.targetValue) * 100);
+                const progressLabel = formatQuestProgress(quest, value);
                 return (
                   <div className={progress?.completed ? "quest-row done" : "quest-row"} key={quest.id}>
                     <div className="quest-check">{progress?.completed ? <Check size={15} aria-hidden /> : null}</div>
@@ -441,9 +608,7 @@ function DashboardView({
                       <strong>{quest.name}</strong>
                     </div>
                     <div className="quest-progress">
-                      <span>
-                        {value}/{quest.targetValue}
-                      </span>
+                      <span>{progressLabel}</span>
                       <div className="meter compact">
                         <span style={{ width: `${percent}%` }} />
                       </div>
@@ -454,6 +619,96 @@ function DashboardView({
             </div>
           </section>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+function WeeklyGoalPanel({
+  state,
+  onSetWeeklyGoal,
+  pending,
+}: {
+  state: GymitionState;
+  onSetWeeklyGoal: (input: { workoutTarget: number; cardioTarget: number }) => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(!state.weeklyGoal);
+  const [workoutTarget, setWorkoutTarget] = useState(state.weeklyGoal?.workoutTarget ?? 3);
+  const [cardioTarget, setCardioTarget] = useState(state.weeklyGoal?.cardioTarget ?? 1);
+  const workoutProgress = Math.min(state.weeklyGoalProgress.workoutsCompleted, workoutTarget);
+  const cardioProgress = Math.min(state.weeklyGoalProgress.cardioWorkoutsCompleted, cardioTarget);
+
+  function saveGoal() {
+    const nextWorkoutTarget = clampInteger(workoutTarget, 1, 14);
+    const nextCardioTarget = clampInteger(cardioTarget, 0, 14);
+    setWorkoutTarget(nextWorkoutTarget);
+    setCardioTarget(nextCardioTarget);
+    onSetWeeklyGoal({ workoutTarget: nextWorkoutTarget, cardioTarget: nextCardioTarget });
+    setEditing(false);
+  }
+
+  return (
+    <section className="weekly-goal-panel">
+      <div className="section-heading">
+        <div>
+          <p className="section-label">本週目標</p>
+          <h2>{state.weeklyGoal ? "追蹤訓練節奏" : "設定你的週目標"}</h2>
+        </div>
+        {state.weeklyGoal && !editing && (
+          <button className="ghost-light-action compact-action" type="button" onClick={() => setEditing(true)}>
+            編輯
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="weekly-goal-form">
+          <label>
+            健身次數
+            <input
+              min="1"
+              max="14"
+              type="number"
+              value={workoutTarget}
+              onChange={(event) => setWorkoutTarget(Number(event.target.value))}
+            />
+          </label>
+          <label>
+            有氧次數
+            <input
+              min="0"
+              max="14"
+              type="number"
+              value={cardioTarget}
+              onChange={(event) => setCardioTarget(Number(event.target.value))}
+            />
+          </label>
+          <button className="primary-action compact-action" type="button" onClick={saveGoal} disabled={pending}>
+            儲存目標
+          </button>
+        </div>
+      ) : (
+        <div className="weekly-goal-progress">
+          <GoalMeter label="健身" value={workoutProgress} target={workoutTarget} />
+          <GoalMeter label="有氧" value={cardioProgress} target={cardioTarget} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function GoalMeter({ label, value, target }: { label: string; value: number; target: number }) {
+  const percent = target === 0 ? 100 : Math.round((value / target) * 100);
+
+  return (
+    <div className="goal-meter-row">
+      <div>
+        <strong>{label}</strong>
+        <span>{target === 0 ? "不設定" : `${value}/${target}`}</span>
+      </div>
+      <div className="meter compact">
+        <span style={{ width: `${Math.min(percent, 100)}%` }} />
       </div>
     </div>
   );
@@ -798,17 +1053,19 @@ function ProfileView({
   level,
   equippedReward,
   ownedRewardIds,
+  rewards,
   onSaveProfile,
 }: {
   state: GymitionState;
   level: number;
   equippedReward?: Reward;
   ownedRewardIds: Set<string>;
+  rewards: Reward[];
   onSaveProfile: (username: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState(state.user.username);
-  const ownedRewards = seedRewards.filter((reward) => ownedRewardIds.has(reward.id));
+  const ownedRewards = rewards.filter((reward) => ownedRewardIds.has(reward.id));
 
   function cancelEdit() {
     setUsernameDraft(state.user.username);
@@ -954,6 +1211,12 @@ function createInitialState(): GymitionState {
     workouts: [],
     userRewards: [],
     questRewards: {},
+    dailyCheckins: [],
+    weeklyGoal: null,
+    weeklyGoalProgress: {
+      workoutsCompleted: 0,
+      cardioWorkoutsCompleted: 0,
+    },
   };
 }
 
@@ -1006,6 +1269,14 @@ function getDailyQuoteIndex(dateKey: string) {
   return [...dateKey].reduce((total, character) => total + character.charCodeAt(0), 0) % motivationalQuotes.length;
 }
 
+function clampInteger(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
 function categoryLabel(category: Exercise["category"]) {
   const labels: Record<Exercise["category"], string> = {
     chest: "胸部",
@@ -1019,6 +1290,14 @@ function categoryLabel(category: Exercise["category"]) {
   };
 
   return labels[category];
+}
+
+function formatQuestProgress(quest: Quest, value: number) {
+  if (quest.targetType === "duration_seconds") {
+    return `${Math.floor(value / 60)}/${Math.floor(quest.targetValue / 60)} 分鐘`;
+  }
+
+  return `${value}/${quest.targetValue}`;
 }
 
 function formatEntry(entry: WorkoutEntry) {

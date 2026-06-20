@@ -1,5 +1,7 @@
-import { GymitionPrototype } from "@/features/prototype/GymitionPrototype";
+import { GymitionApp } from "@/features/app/GymitionApp";
 
-export default function WorkoutPage() {
-  return <GymitionPrototype initialView="workout" />;
+export const dynamic = "force-dynamic";
+
+export default async function WorkoutPage() {
+  return <GymitionApp view="workout" />;
 }

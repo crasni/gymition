@@ -79,6 +79,26 @@ export const users = pgTable(
   (table) => [uniqueIndex("users_email_unique").on(table.email)],
 );
 
+export const dailyCheckins = pgTable(
+  "daily_checkins",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    checkinDate: date("checkin_date").notNull(),
+    streakDay: integer("streak_day").notNull(),
+    coinsEarned: integer("coins_earned").notNull().default(0),
+    xpEarned: integer("xp_earned").notNull().default(0),
+    streakBonusCoins: integer("streak_bonus_coins").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("daily_checkins_user_date_unique").on(table.userId, table.checkinDate),
+    index("daily_checkins_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
+
 export const exercises = pgTable("exercises", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -198,6 +218,25 @@ export const userQuests = pgTable(
   (table) => [
     index("user_quests_user_period_idx").on(table.userId, table.periodStart),
     uniqueIndex("user_quests_unique_period").on(table.userId, table.questId, table.periodStart),
+  ],
+);
+
+export const userWeeklyGoals = pgTable(
+  "user_weekly_goals",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    weekStart: date("week_start").notNull(),
+    workoutTarget: integer("workout_target").notNull(),
+    cardioTarget: integer("cardio_target").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("user_weekly_goals_user_week_unique").on(table.userId, table.weekStart),
+    index("user_weekly_goals_user_idx").on(table.userId),
   ],
 );
 

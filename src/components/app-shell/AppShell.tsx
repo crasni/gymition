@@ -36,6 +36,7 @@ export function AppShell({
   streak,
   username,
   onReset,
+  resetLabel = "重置示範資料",
   children,
 }: {
   activeView: AppView;
@@ -44,6 +45,7 @@ export function AppShell({
   streak: number;
   username: string;
   onReset: () => void;
+  resetLabel?: string;
   children: ReactNode;
 }) {
   const level = levelFromXp(xp);
@@ -95,7 +97,7 @@ export function AppShell({
 
         <button className="ghost-action" type="button" onClick={onReset}>
           <RotateCcw size={16} aria-hidden />
-          重置示範資料
+          {resetLabel}
         </button>
       </aside>
 

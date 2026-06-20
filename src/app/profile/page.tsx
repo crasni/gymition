@@ -1,5 +1,7 @@
-import { GymitionPrototype } from "@/features/prototype/GymitionPrototype";
+import { GymitionApp } from "@/features/app/GymitionApp";
 
-export default function ProfilePage() {
-  return <GymitionPrototype initialView="profile" />;
+export const dynamic = "force-dynamic";
+
+export default async function ProfilePage() {
+  return <GymitionApp view="profile" />;
 }

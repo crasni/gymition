@@ -119,6 +119,28 @@ export type QuestProgress = {
   rewarded: boolean;
 };
 
+export type DailyCheckin = {
+  id: string;
+  checkinDate: string;
+  streakDay: number;
+  coinsEarned: number;
+  xpEarned: number;
+  streakBonusCoins: number;
+  createdAt: string;
+};
+
+export type WeeklyGoal = {
+  id: string;
+  weekStart: string;
+  workoutTarget: number;
+  cardioTarget: number;
+};
+
+export type WeeklyGoalProgress = {
+  workoutsCompleted: number;
+  cardioWorkoutsCompleted: number;
+};
+
 export type GymitionState = {
   user: UserProfile;
   coinLedger: LedgerEntry[];
@@ -126,4 +148,7 @@ export type GymitionState = {
   workouts: WorkoutSession[];
   userRewards: UserReward[];
   questRewards: Record<string, string>;
+  dailyCheckins: DailyCheckin[];
+  weeklyGoal: WeeklyGoal | null;
+  weeklyGoalProgress: WeeklyGoalProgress;
 };
