@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db/client";
 import { coinLedgerEntries, dailyCheckins, users, xpLedgerEntries } from "@/db/schema";
@@ -23,7 +23,18 @@ export async function claimDailyRewardAction() {
     }
 
     if (freshUser.lastLoginRewardDate === today) {
-      throw new Error("Daily reward already claimed.");
+      const [existingCheckin] = await tx
+        .select()
+        .from(dailyCheckins)
+        .where(and(eq(dailyCheckins.userId, appUser.id), eq(dailyCheckins.checkinDate, today)))
+        .limit(1);
+
+      return {
+        coins: (existingCheckin?.coinsEarned ?? REWARD_RULES.dailyLogin.coins) + (existingCheckin?.streakBonusCoins ?? 0),
+        xp: existingCheckin?.xpEarned ?? REWARD_RULES.dailyLogin.xp,
+        streak: freshUser.currentStreak,
+        streakBonus: existingCheckin?.streakBonusCoins ?? 0,
+      };
     }
 
     const nextStreak = nextLoginStreak(freshUser.lastLoginRewardDate, freshUser.currentStreak);
@@ -31,27 +42,51 @@ export async function claimDailyRewardAction() {
     const totalCoins = REWARD_RULES.dailyLogin.coins + streakBonus;
     const now = new Date();
 
+    const [insertedCheckin] = await tx
+      .insert(dailyCheckins)
+      .values({
+        id: createId("checkin"),
+        userId: appUser.id,
+        checkinDate: today,
+        streakDay: nextStreak,
+        coinsEarned: REWARD_RULES.dailyLogin.coins,
+        xpEarned: REWARD_RULES.dailyLogin.xp,
+        streakBonusCoins: streakBonus,
+        createdAt: now,
+      })
+      .onConflictDoNothing({
+        target: [dailyCheckins.userId, dailyCheckins.checkinDate],
+      })
+      .returning();
+
+    if (!insertedCheckin) {
+      const [[existingCheckin], [currentUser]] = await Promise.all([
+        tx
+          .select()
+          .from(dailyCheckins)
+          .where(and(eq(dailyCheckins.userId, appUser.id), eq(dailyCheckins.checkinDate, today)))
+          .limit(1),
+        tx.select().from(users).where(eq(users.id, appUser.id)).limit(1),
+      ]);
+
+      return {
+        coins: (existingCheckin?.coinsEarned ?? REWARD_RULES.dailyLogin.coins) + (existingCheckin?.streakBonusCoins ?? 0),
+        xp: existingCheckin?.xpEarned ?? REWARD_RULES.dailyLogin.xp,
+        streak: currentUser?.currentStreak ?? freshUser.currentStreak,
+        streakBonus: existingCheckin?.streakBonusCoins ?? 0,
+      };
+    }
+
     await tx
       .update(users)
       .set({
-        coins: freshUser.coins + totalCoins,
-        xp: freshUser.xp + REWARD_RULES.dailyLogin.xp,
+        coins: sql`${users.coins} + ${totalCoins}`,
+        xp: sql`${users.xp} + ${REWARD_RULES.dailyLogin.xp}`,
         currentStreak: nextStreak,
         lastLoginRewardDate: today,
         updatedAt: now,
       })
       .where(eq(users.id, appUser.id));
-
-    await tx.insert(dailyCheckins).values({
-      id: createId("checkin"),
-      userId: appUser.id,
-      checkinDate: today,
-      streakDay: nextStreak,
-      coinsEarned: REWARD_RULES.dailyLogin.coins,
-      xpEarned: REWARD_RULES.dailyLogin.xp,
-      streakBonusCoins: streakBonus,
-      createdAt: now,
-    });
 
     await tx.insert(coinLedgerEntries).values([
       {

@@ -38,14 +38,20 @@ export async function checkinLifeHabitAction(input: { habitType: string }) {
       )
       .limit(1);
 
-    if (!existingCheckin) {
-      await tx.insert(lifeHabitCheckins).values({
-        id: createId("life_checkin"),
-        userId: appUser.id,
-        checkinDate: today,
-        habitType,
-      });
-    }
+    const [insertedCheckin] = existingCheckin
+      ? [null]
+      : await tx
+          .insert(lifeHabitCheckins)
+          .values({
+            id: createId("life_checkin"),
+            userId: appUser.id,
+            checkinDate: today,
+            habitType,
+          })
+          .onConflictDoNothing({
+            target: [lifeHabitCheckins.userId, lifeHabitCheckins.checkinDate, lifeHabitCheckins.habitType],
+          })
+          .returning({ id: lifeHabitCheckins.id });
 
     const checkins = await tx
       .select()
@@ -57,7 +63,7 @@ export async function checkinLifeHabitAction(input: { habitType: string }) {
 
     return {
       habitType,
-      alreadyCompleted: Boolean(existingCheckin),
+      alreadyCompleted: Boolean(existingCheckin || !insertedCheckin),
       todayCompleted: isLifeDayComplete(todayHabits),
       todayCompletedCount: todayHabits?.size ?? 0,
       streak: calculateLifeStreak(checkins),

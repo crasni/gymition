@@ -2,15 +2,18 @@ import type { LedgerEntry, LedgerReason } from "./types";
 import { createId } from "@/lib/ids";
 
 export const REWARD_RULES = {
-  dailyLogin: { coins: 20, xp: 10 },
-  workoutCompleted: { coins: 50, xp: 50 },
-  exerciseLogged: { coins: 10, xp: 10 },
-  streakBonusPerDay: 5,
-  streakBonusCap: 50,
+  dailyLogin: { coins: 10, xp: 10 },
+  workoutCompleted: { coins: 35, xp: 45 },
+  exerciseLogged: { coins: 2, xp: 8 },
+  streakBonusCap: 20,
 };
 
 export function calculateStreakBonus(streak: number) {
-  return Math.min(streak * REWARD_RULES.streakBonusPerDay, REWARD_RULES.streakBonusCap);
+  if (streak >= 30) return REWARD_RULES.streakBonusCap;
+  if (streak >= 14) return 15;
+  if (streak >= 7) return 10;
+  if (streak >= 3) return 5;
+  return 0;
 }
 
 export function createLedgerEntry(

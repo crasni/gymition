@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { notInArray } from "drizzle-orm";
 import postgres from "postgres";
 import { seedExercises } from "../src/features/exercises/seed-exercises";
 import { dailyQuests } from "../src/features/quests/quest-rules";
@@ -99,6 +100,11 @@ async function seed() {
           },
         });
     }
+
+    await tx
+      .update(schema.rewards)
+      .set({ isActive: false })
+      .where(notInArray(schema.rewards.id, seedRewards.map((reward) => reward.id)));
   });
 }
 

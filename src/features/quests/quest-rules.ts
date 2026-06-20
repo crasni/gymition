@@ -9,8 +9,8 @@ export const dailyQuests: Quest[] = [
     period: "daily",
     targetType: "workout_completed",
     targetValue: 1,
-    coinReward: 30,
-    xpReward: 20,
+    coinReward: 15,
+    xpReward: 25,
     isActive: true,
   },
   {
@@ -21,8 +21,8 @@ export const dailyQuests: Quest[] = [
     period: "daily",
     targetType: "exercise_count",
     targetValue: 3,
-    coinReward: 40,
-    xpReward: 30,
+    coinReward: 10,
+    xpReward: 35,
     isActive: true,
   },
   {
@@ -34,8 +34,8 @@ export const dailyQuests: Quest[] = [
     targetType: "category_logged",
     targetValue: 1,
     category: "legs",
-    coinReward: 25,
-    xpReward: 20,
+    coinReward: 10,
+    xpReward: 25,
     isActive: true,
   },
   {
@@ -47,8 +47,8 @@ export const dailyQuests: Quest[] = [
     targetType: "duration_seconds",
     targetValue: 600,
     category: "cardio",
-    coinReward: 35,
-    xpReward: 25,
+    coinReward: 12,
+    xpReward: 30,
     isActive: true,
   },
 ];

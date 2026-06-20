@@ -1,5 +1,6 @@
 "use client";
 
+import { SignOutButton } from "@clerk/nextjs";
 import Link from "next/link";
 import {
   Dumbbell,
@@ -7,6 +8,7 @@ import {
   HeartPulse,
   History,
   LayoutDashboard,
+  LogOut,
   Medal,
   RotateCcw,
   Trophy,
@@ -101,6 +103,15 @@ export function AppShell({
           <RotateCcw size={16} aria-hidden />
           {resetLabel}
         </button>
+
+        <div className="sidebar-logout">
+          <SignOutButton redirectUrl="/sign-in">
+            <button className="ghost-action" type="button">
+              <LogOut size={16} aria-hidden />
+              Log out
+            </button>
+          </SignOutButton>
+        </div>
       </aside>
 
       <main className="main-shell">
@@ -112,7 +123,7 @@ export function AppShell({
           <div className="topbar-stats" aria-label="Current player status">
             <span>{username}</span>
             <strong>{coins} coins</strong>
-            <span>{streak} day streak</span>
+            <span>{streak} day check-in streak</span>
           </div>
         </header>
         {children}

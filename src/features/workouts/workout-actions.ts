@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db/client";
 import {
@@ -214,41 +214,71 @@ export async function completeWorkoutAction(input: unknown) {
       }
 
       if (progress < quest.targetValue) {
-        if (existingQuest) {
-          await tx
-            .update(userQuests)
-            .set({ progress })
-            .where(eq(userQuests.id, existingQuest.id));
-        } else {
-          await tx.insert(userQuests).values({
+        await tx
+          .insert(userQuests)
+          .values({
             id: createId("user_quest"),
             userId: appUser.id,
             questId: quest.id,
             periodStart: today,
             periodEnd: today,
             progress,
+          })
+          .onConflictDoUpdate({
+            target: [userQuests.userId, userQuests.questId, userQuests.periodStart],
+            set: { progress },
           });
-        }
         continue;
       }
 
       const claimedAt = new Date();
+      let questClaimed = false;
+
       if (existingQuest) {
-        await tx
+        const [claimedQuest] = await tx
           .update(userQuests)
           .set({ progress, completedAt: claimedAt, claimedAt })
-          .where(eq(userQuests.id, existingQuest.id));
+          .where(and(eq(userQuests.id, existingQuest.id), isNull(userQuests.claimedAt)))
+          .returning({ id: userQuests.id });
+        questClaimed = Boolean(claimedQuest);
       } else {
-        await tx.insert(userQuests).values({
-          id: createId("user_quest"),
-          userId: appUser.id,
-          questId: quest.id,
-          periodStart: today,
-          periodEnd: today,
-          progress,
-          completedAt: claimedAt,
-          claimedAt,
-        });
+        const [createdQuest] = await tx
+          .insert(userQuests)
+          .values({
+            id: createId("user_quest"),
+            userId: appUser.id,
+            questId: quest.id,
+            periodStart: today,
+            periodEnd: today,
+            progress,
+            completedAt: claimedAt,
+            claimedAt,
+          })
+          .onConflictDoNothing({
+            target: [userQuests.userId, userQuests.questId, userQuests.periodStart],
+          })
+          .returning({ id: userQuests.id });
+        questClaimed = Boolean(createdQuest);
+
+        if (!questClaimed) {
+          const [claimedQuest] = await tx
+            .update(userQuests)
+            .set({ progress, completedAt: claimedAt, claimedAt })
+            .where(
+              and(
+                eq(userQuests.userId, appUser.id),
+                eq(userQuests.questId, quest.id),
+                eq(userQuests.periodStart, today),
+                isNull(userQuests.claimedAt),
+              ),
+            )
+            .returning({ id: userQuests.id });
+          questClaimed = Boolean(claimedQuest);
+        }
+      }
+
+      if (!questClaimed) {
+        continue;
       }
 
       totalCoins += quest.coinReward;
@@ -282,8 +312,8 @@ export async function completeWorkoutAction(input: unknown) {
     await tx
       .update(users)
       .set({
-        coins: freshUser.coins + totalCoins,
-        xp: freshUser.xp + totalXp,
+        coins: sql`${users.coins} + ${totalCoins}`,
+        xp: sql`${users.xp} + ${totalXp}`,
         updatedAt: new Date(),
       })
       .where(eq(users.id, appUser.id));

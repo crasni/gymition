@@ -744,8 +744,8 @@ export function GymitionPrototype({
       )}
       {dailyCheckinSummary && (
         <StreakCelebration
-          title="Gym streak complete"
-          label="Gym streak"
+          title="Check-in streak complete"
+          label="Check-in streak"
           streak={dailyCheckinSummary.streak}
           detail={`+${dailyCheckinSummary.coins} coins · +${dailyCheckinSummary.xp} XP`}
           onDismiss={() => setDailyCheckinSummary(null)}
@@ -867,7 +867,7 @@ function DashboardView({
               <strong>{dailyClaimed ? "Daily reward claimed" : "Claim daily reward"}</strong>
               <small>
                 {dailyClaimed
-                  ? "Come back tomorrow to keep the streak alive"
+                  ? "Come back tomorrow to keep the check-in streak alive"
                   : `+${REWARD_RULES.dailyLogin.coins} coins, +${REWARD_RULES.dailyLogin.xp} XP`}
               </small>
             </span>
@@ -878,7 +878,7 @@ function DashboardView({
       <section className="status-strip" aria-label="Current progress">
         <StatTile label="Coins" value={state.user.coins.toString()} icon={<CircleDollarSign size={19} />} />
         <StatTile label="Level" value={`${level}`} icon={<Sparkles size={19} />} />
-        <StatTile label="Streak" value={`${state.user.currentStreak} days`} icon={<Flame size={19} />} />
+        <StatTile label="Check-in streak" value={`${state.user.currentStreak} days`} icon={<Flame size={19} />} />
       </section>
 
       <div className="workbench-grid">
@@ -930,13 +930,15 @@ function DashboardView({
                 return (
                   <div className={progress?.completed ? "quest-row done" : "quest-row"} key={quest.id}>
                     <div className="quest-check">{progress?.completed ? <Check size={15} aria-hidden /> : null}</div>
-                    <div>
-                      <strong>{quest.name}</strong>
-                    </div>
-                    <div className="quest-progress">
-                      <span>{progressLabel}</span>
-                      <div className="meter compact">
-                        <span style={{ width: `${percent}%` }} />
+                    <div className="quest-content">
+                      <div className="quest-title-row">
+                        <strong>{quest.name}</strong>
+                        <span>{progressLabel}</span>
+                      </div>
+                      <div className="quest-progress">
+                        <div className="meter compact">
+                          <span style={{ width: `${percent}%` }} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1696,7 +1698,7 @@ function ProfileView({
           <strong>{state.user.coins}</strong>
         </div>
         <div>
-          <span>Gym streak</span>
+          <span>Check-in streak</span>
           <strong>{state.user.currentStreak}</strong>
         </div>
         <div>
@@ -2059,7 +2061,7 @@ function ledgerReasonLabel(reason: LedgerReason) {
     workout_completed: "Workout complete",
     exercise_logged: "Exercise logged",
     quest_completed: "Quest complete",
-    streak_bonus: "Streak bonus",
+    streak_bonus: "Check-in streak bonus",
     reward_purchase: "Reward redeemed",
     manual_adjustment: "Manual adjustment",
   };

@@ -78,10 +78,10 @@ a {
 }
 
 .sidebar {
-  align-content: start;
   background: #2c211b;
   color: #fff7ec;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 24px;
   height: 100vh;
   left: 0;
@@ -190,11 +190,20 @@ a {
   font-weight: 700;
 }
 
+.sidebar-logout {
+  display: flex;
+  margin-top: auto;
+}
+
 .ghost-action {
   background: transparent;
   border: 1px solid #6a5140;
   color: #fff0dd;
   justify-content: center;
+}
+
+.sidebar-logout .ghost-action {
+  width: 100%;
 }
 
 .ghost-action:hover {
@@ -415,18 +424,20 @@ h2 {
   border: 0;
   box-shadow: none;
   display: grid;
-  gap: 2px 12px;
+  gap: 1px 12px;
   grid-template-columns: 44px 1fr;
-  padding: 16px 18px;
+  padding: 14px 18px;
 }
 
 .stat-tile strong {
   font-size: 24px;
+  line-height: 1.15;
 }
 
 .stat-tile span {
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.2;
 }
 
 .stat-tile strong,
@@ -445,9 +456,9 @@ h2 {
   color: var(--accent-strong);
   display: inline-flex;
   font-weight: 900;
-  height: 34px;
+  height: 30px;
   justify-content: center;
-  width: 34px;
+  width: 30px;
 }
 
 .rail-heading {
@@ -548,14 +559,24 @@ h2 {
 .quest-row {
   align-items: start;
   display: grid;
-  gap: 4px 12px;
-  grid-template-columns: 34px minmax(0, 1fr);
-  padding: 10px 12px;
+  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  padding: 8px 12px 9px;
 }
 
-.quest-row .quest-progress {
-  grid-column: 2;
-  margin-top: 2px;
+.quest-content {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.quest-title-row {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
 }
 
 .quest-row.done .quest-check {
@@ -567,18 +588,21 @@ h2 {
 .entry-row strong {
   display: block;
   margin-bottom: 0;
+  line-height: 1.15;
+  min-width: 0;
 }
 
 .quest-row span,
 .entry-row span {
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .quest-progress {
   align-items: center;
   display: grid;
-  gap: 4px;
   min-width: 130px;
 }
 
@@ -1732,6 +1756,10 @@ select:focus {
     overflow-y: visible;
     position: static;
     width: auto;
+  }
+
+  .sidebar-logout {
+    margin-top: 0;
   }
 
   .main-shell {
