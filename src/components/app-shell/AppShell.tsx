@@ -18,12 +18,12 @@ import { levelFromXp, xpForNextLevel } from "@/features/economy/xp-rules";
 type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "profile";
 
 const navItems = [
-  { view: "dashboard", href: "/dashboard", label: "總覽", icon: LayoutDashboard },
-  { view: "workout", href: "/workout", label: "訓練", icon: Dumbbell },
-  { view: "history", href: "/history", label: "紀錄", icon: History },
-  { view: "rewards", href: "/rewards", label: "獎勵", icon: Gift },
-  { view: "life", href: "/life", label: "生活", icon: HeartPulse },
-  { view: "profile", href: "/profile", label: "個人", icon: User },
+  { view: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { view: "workout", href: "/workout", label: "Workout", icon: Dumbbell },
+  { view: "history", href: "/history", label: "History", icon: History },
+  { view: "rewards", href: "/rewards", label: "Rewards", icon: Gift },
+  { view: "life", href: "/life", label: "Life", icon: HeartPulse },
+  { view: "profile", href: "/profile", label: "Profile", icon: User },
 ] satisfies Array<{
   view: AppView;
   href: string;
@@ -38,7 +38,7 @@ export function AppShell({
   streak,
   username,
   onReset,
-  resetLabel = "重置示範資料",
+  resetLabel = "Reset demo data",
   children,
 }: {
   activeView: AppView;
@@ -89,12 +89,12 @@ export function AppShell({
         <div className="sidebar-card">
           <div className="sidebar-card-top">
             <Medal size={18} aria-hidden />
-            <span>等級 {level}</span>
+            <span>Level {level}</span>
           </div>
-          <div className="meter" aria-label={`等級進度 ${levelProgress}%`}>
+          <div className="meter" aria-label={`Level progress ${levelProgress}%`}>
             <span style={{ width: `${levelProgress}%` }} />
           </div>
-          <p>累積 {xp} XP</p>
+          <p>{xp} XP earned</p>
         </div>
 
         <button className="ghost-action" type="button" onClick={onReset}>
@@ -109,10 +109,10 @@ export function AppShell({
             <p className="eyebrow">Gymition</p>
             <h1>{activeViewLabel(activeView)}</h1>
           </div>
-          <div className="topbar-stats" aria-label="目前個人狀態">
+          <div className="topbar-stats" aria-label="Current player status">
             <span>{username}</span>
-            <strong>{coins} 金幣</strong>
-            <span>連續 {streak} 天</span>
+            <strong>{coins} coins</strong>
+            <span>{streak} day streak</span>
           </div>
         </header>
         {children}
@@ -122,10 +122,10 @@ export function AppShell({
 }
 
 function activeViewLabel(view: AppView) {
-  if (view === "dashboard") return "總覽";
-  if (view === "workout") return "訓練紀錄";
-  if (view === "history") return "歷史紀錄";
-  if (view === "rewards") return "獎勵商店";
-  if (view === "life") return "Life 追蹤";
-  return "個人檔案";
+  if (view === "dashboard") return "Dashboard";
+  if (view === "workout") return "Workout Log";
+  if (view === "history") return "History";
+  if (view === "rewards") return "Reward Shop";
+  if (view === "life") return "Life Tracker";
+  return "Profile";
 }

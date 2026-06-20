@@ -85,8 +85,11 @@ export type WorkoutEntry = {
 export type WorkoutSession = {
   id: string;
   status: "draft" | "completed" | "cancelled";
+  mode: "detailed" | "simple";
   startedAt: string;
   completedAt: string | null;
+  durationSeconds?: number;
+  notes?: string;
   entries: WorkoutEntry[];
   totalCoinsEarned: number;
   totalXpEarned: number;

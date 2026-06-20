@@ -174,8 +174,11 @@ export async function loadGymitionAppState() {
       (workout): WorkoutSession => ({
         id: workout.id,
         status: workout.status,
+        mode: workout.mode,
         startedAt: workout.startedAt.toISOString(),
         completedAt: toIso(workout.completedAt),
+        durationSeconds: workout.durationSeconds ?? undefined,
+        notes: workout.notes ?? undefined,
         entries: entriesBySessionId.get(workout.id) ?? [],
         totalCoinsEarned: workout.totalCoinsEarned,
         totalXpEarned: workout.totalXpEarned,

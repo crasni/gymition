@@ -32,6 +32,7 @@ export const measurementTypeEnum = pgEnum("measurement_type", [
 ]);
 
 export const workoutStatusEnum = pgEnum("workout_status", ["draft", "completed", "cancelled"]);
+export const workoutModeEnum = pgEnum("workout_mode", ["detailed", "simple"]);
 
 export const ledgerReasonEnum = pgEnum("ledger_reason", [
   "daily_login",
@@ -140,8 +141,11 @@ export const workoutSessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     status: workoutStatusEnum("status").notNull().default("draft"),
+    mode: workoutModeEnum("mode").notNull().default("detailed"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    durationSeconds: integer("duration_seconds"),
+    notes: text("notes"),
     totalCoinsEarned: integer("total_coins_earned").notNull().default(0),
     totalXpEarned: integer("total_xp_earned").notNull().default(0),
   },

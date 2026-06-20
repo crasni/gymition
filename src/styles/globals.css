@@ -415,9 +415,9 @@ h2 {
   border: 0;
   box-shadow: none;
   display: grid;
-  gap: 7px;
+  gap: 2px 12px;
   grid-template-columns: 44px 1fr;
-  padding: 18px;
+  padding: 16px 18px;
 }
 
 .stat-tile strong {
@@ -529,7 +529,7 @@ h2 {
 .history-list,
 .profile-stats {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .quest-row,
@@ -548,11 +548,14 @@ h2 {
 .quest-row {
   align-items: start;
   display: grid;
+  gap: 4px 12px;
   grid-template-columns: 34px minmax(0, 1fr);
+  padding: 10px 12px;
 }
 
 .quest-row .quest-progress {
   grid-column: 2;
+  margin-top: 2px;
 }
 
 .quest-row.done .quest-check {
@@ -563,7 +566,7 @@ h2 {
 .quest-row strong,
 .entry-row strong {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .quest-row span,
@@ -575,7 +578,7 @@ h2 {
 .quest-progress {
   align-items: center;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 130px;
 }
 
@@ -631,9 +634,17 @@ h2 {
 .life-layout {
   display: grid;
   gap: 16px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: calc(100vh - 104px);
 }
 
 .life-hero,
+.life-calendar-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
 .life-calendar-panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -767,6 +778,7 @@ h2 {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto repeat(6, minmax(64px, 1fr));
 }
 
 .calendar-weekday {
@@ -832,6 +844,96 @@ h2 {
 
 .checkin-toast.life-complete {
   border-color: #a9d6b8;
+}
+
+.streak-celebration-backdrop {
+  align-items: center;
+  animation: streak-backdrop-in 240ms ease both;
+  background: rgba(43, 32, 24, 0.18);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  cursor: pointer;
+  position: fixed;
+  z-index: 40;
+}
+
+.streak-celebration {
+  align-items: center;
+  animation: streak-card-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 240, 214, 0.95), rgba(255, 255, 255, 0) 48%),
+    #ffffff;
+  border: 1px solid #ead1a4;
+  border-radius: 8px;
+  box-shadow: 0 30px 90px rgba(43, 32, 24, 0.2);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 28px;
+  position: relative;
+  text-align: center;
+  width: 100%;
+}
+
+.streak-dismiss {
+  align-items: center;
+  background: #fffaf1;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 32px;
+}
+
+.streak-dismiss:hover {
+  background: #ffffff;
+  color: var(--text);
+}
+
+.streak-celebration h2 {
+  font-size: 44px;
+  line-height: 1;
+  margin: 2px 0;
+}
+
+.streak-celebration strong {
+  color: var(--accent-strong);
+}
+
+.streak-celebration span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.streak-checkmark {
+  align-items: center;
+  animation: streak-check-pop 560ms ease both;
+  background: #e4f7e9;
+  border: 1px solid #a9d6b8;
+  border-radius: 999px;
+  color: #347c4d;
+  display: inline-flex;
+  height: 78px;
+  justify-content: center;
+  position: relative;
+  width: 78px;
+}
+
+.streak-checkmark::after {
+  animation: streak-ring 700ms ease-out both;
+  border: 1px solid rgba(52, 124, 77, 0.24);
+  border-radius: inherit;
+  content: "";
+  inset: -8px;
+  position: absolute;
 }
 
 .checkin-toast {
@@ -1008,6 +1110,37 @@ select:focus {
   justify-content: space-between;
 }
 
+.workout-toolbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.mode-switch {
+  background: #fffaf1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: inline-flex;
+  padding: 3px;
+}
+
+.mode-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.mode-switch button.active {
+  background: #ffffff;
+  box-shadow: 0 5px 14px rgba(89, 62, 33, 0.08);
+  color: var(--text);
+}
+
 .round-add-action,
 .ghost-light-action,
 .compact-action {
@@ -1114,12 +1247,40 @@ select:focus {
 
 .workout-footer {
   background: #fffaf1;
+  border-top: 1px solid var(--border);
+  padding: 14px 16px;
 }
 
 .workout-footer span {
   color: var(--muted);
-  min-width: max-content;
-  white-space: nowrap;
+  min-width: 0;
+}
+
+.workout-footer .complete-action {
+  flex: 0 0 auto;
+  min-width: 132px;
+  width: auto;
+}
+
+.simple-workout-panel {
+  align-items: end;
+  background: #fffdf9;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 48px minmax(120px, 180px) minmax(0, 1fr);
+  padding: 16px;
+}
+
+.simple-workout-icon {
+  align-items: center;
+  align-self: center;
+  background: var(--accent-soft);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
 }
 
 .modal-backdrop {
@@ -1174,6 +1335,36 @@ select:focus {
 .compact-action {
   min-height: 38px;
   padding: 0 12px;
+}
+
+.danger-action {
+  align-items: center;
+  background: #9f3f2f;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+}
+
+.danger-action:hover:not(:disabled) {
+  background: #873426;
+  box-shadow: 0 10px 22px rgba(159, 63, 47, 0.18);
+  transform: translateY(-1px);
+}
+
+.danger-modal {
+  max-width: 520px;
+}
+
+.danger-copy {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
 }
 
 .history-layout {
@@ -1468,6 +1659,57 @@ select:focus {
   }
 }
 
+@keyframes streak-backdrop-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes streak-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes streak-check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+
+  65% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes streak-ring {
+  from {
+    opacity: 0.8;
+    transform: scale(0.82);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
+
 @keyframes life-day-complete {
   0% {
     transform: scale(0.98);
@@ -1527,6 +1769,16 @@ select:focus {
     min-width: 0;
   }
 
+  .workout-toolbar,
+  .workout-toolbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mode-switch {
+    align-self: start;
+  }
+
 }
 
 @media (max-width: 680px) {
@@ -1575,7 +1827,6 @@ select:focus {
 
   .topbar-stats,
   .quest-row,
-  .workout-toolbar,
   .workout-footer,
   .shop-head,
   .profile-hero,
@@ -1610,6 +1861,18 @@ select:focus {
   .shop-item-action {
     align-items: stretch;
     justify-items: stretch;
+  }
+
+  .simple-workout-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .simple-workout-icon {
+    display: none;
+  }
+
+  .workout-footer .complete-action {
+    width: 100%;
   }
 
   .profile-actions {

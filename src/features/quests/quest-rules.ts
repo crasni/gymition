@@ -4,8 +4,8 @@ export const dailyQuests: Quest[] = [
   {
     id: "quest_complete_1_workout",
     code: "complete_1_workout",
-    name: "完成一次訓練",
-    description: "今天完成 1 次訓練。",
+    name: "Complete one workout",
+    description: "Complete 1 workout today.",
     period: "daily",
     targetType: "workout_completed",
     targetValue: 1,
@@ -16,8 +16,8 @@ export const dailyQuests: Quest[] = [
   {
     id: "quest_log_3_exercises",
     code: "log_3_exercises",
-    name: "累積訓練量",
-    description: "任一訓練中紀錄 3 個動作。",
+    name: "Build volume",
+    description: "Log 3 exercises in any workout.",
     period: "daily",
     targetType: "exercise_count",
     targetValue: 3,
@@ -28,8 +28,8 @@ export const dailyQuests: Quest[] = [
   {
     id: "quest_train_legs",
     code: "train_legs",
-    name: "腿日加分",
-    description: "紀錄任一腿部動作。",
+    name: "Leg day bonus",
+    description: "Log any leg exercise.",
     period: "daily",
     targetType: "category_logged",
     targetValue: 1,
@@ -41,8 +41,8 @@ export const dailyQuests: Quest[] = [
   {
     id: "quest_cardio_10",
     code: "cardio_10_minutes",
-    name: "心率啟動",
-    description: "紀錄 10 分鐘有氧。",
+    name: "Raise your heart rate",
+    description: "Log 10 minutes of cardio.",
     period: "daily",
     targetType: "duration_seconds",
     targetValue: 600,

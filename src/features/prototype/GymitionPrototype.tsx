@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   Check,
   CheckCircle2,
   CircleDollarSign,
@@ -23,7 +24,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell/AppShell";
 import {
@@ -58,19 +59,27 @@ type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "profi
 
 type ServerActions = {
   claimDailyReward?: () => Promise<DailyCheckinSummary>;
-  completeWorkout?: (input: {
-    entries: Array<{
-      exerciseId: string;
-      sets?: number;
-      reps?: number;
-      weight?: number;
-      durationSeconds?: number;
-      distanceMeters?: number;
-      notes?: string;
-    }>;
-  }) => Promise<void>;
+  completeWorkout?: (input:
+    | {
+        mode: "detailed";
+        entries: Array<{
+          exerciseId: string;
+          sets?: number;
+          reps?: number;
+          weight?: number;
+          durationSeconds?: number;
+          distanceMeters?: number;
+          notes?: string;
+        }>;
+      }
+    | {
+        mode: "simple";
+        durationSeconds: number;
+        notes?: string;
+      }) => Promise<void>;
   purchaseReward?: (input: { rewardId: string }) => Promise<void>;
   updateProfile?: (input: { username: string }) => Promise<void>;
+  resetProfileData?: () => Promise<void>;
   setWeeklyGoal?: (input: { workoutTarget: number; cardioTarget: number }) => Promise<void>;
   checkinLifeHabit?: (input: { habitType: LifeHabitType }) => Promise<LifeCheckinSummary>;
 };
@@ -104,36 +113,68 @@ const defaultDraftEntry: DraftEntry = {
 
 const motivationalQuotes = [
   {
-    line: "先完成今天的一組，其他的交給節奏。",
-    note: "把第一個動作記下來，訓練就已經開始了。",
+    line: "Log the first set. Let the rhythm take over.",
+    note: "Once the first movement is written down, the workout has already started.",
   },
   {
-    line: "不用每次都很猛，但要讓自己有紀錄。",
-    note: "穩定累積的重量、次數和時間，會比感覺更誠實。",
+    line: "You do not need a huge session. You need a recorded one.",
+    note: "Weights, reps, and minutes tell a cleaner story than memory does.",
   },
   {
-    line: "今天的你，只需要贏過沒有開始的版本。",
-    note: "小一點也沒關係，先把訓練清單填起來。",
+    line: "Today only has to beat the version that never started.",
+    note: "Keep it small if needed. Fill the workout list first.",
   },
   {
-    line: "身體會記得你重複做過的事。",
-    note: "完成訓練後，金幣、XP 和任務會自動結算。",
+    line: "Your body remembers what you repeat.",
+    note: "Coins, XP, and quests settle automatically after each workout.",
   },
   {
-    line: "把動作做乾淨，比把版面填滿更重要。",
-    note: "一次記一個動作，讓今天的訓練清楚可追蹤。",
+    line: "Clean reps beat a crowded log.",
+    note: "Track one movement at a time so today stays easy to read.",
+  },
+  {
+    line: "Own the next ten minutes.",
+    note: "Autonomy keeps training personal. Pick the smallest honest start and take it.",
+  },
+  {
+    line: "A logged workout is proof, not a promise.",
+    note: "Make progress visible today, then let tomorrow earn its own mark.",
+  },
+  {
+    line: "Do the version you can repeat.",
+    note: "The session that fits your life is the one most likely to survive the week.",
+  },
+  {
+    line: "Restart fast. That is the skill.",
+    note: "Missing a day matters less than making the next entry obvious.",
+  },
+  {
+    line: "Train for a reason you respect.",
+    note: "Performance, energy, confidence, or calm all count when they are yours.",
+  },
+  {
+    line: "Keep the bar low enough to step over.",
+    note: "Momentum is built by completed reps, not perfect intentions.",
+  },
+  {
+    line: "Your streak is just attendance with memory.",
+    note: "Show up, record the work, and let the count stay honest.",
+  },
+  {
+    line: "Make competence visible.",
+    note: "A few tracked numbers can turn a vague workout into a repeatable system.",
   },
 ] as const;
 
 const lifeHabitMeta = {
   face_wash: {
-    label: "洗臉",
-    note: "清爽開始，讓今天留下一個乾淨的刻度。",
+    label: "Wash face",
+    note: "Start clean and mark the day with one small win.",
     Icon: Droplets,
   },
   tooth_brush: {
-    label: "刷牙",
-    note: "把小事做到，就是節奏。",
+    label: "Brush teeth",
+    note: "Small done things become rhythm.",
     Icon: SmilePlus,
   },
 } satisfies Record<LifeHabitType, { label: string; note: string; Icon: typeof Droplets }>;
@@ -156,28 +197,34 @@ export function GymitionPrototype({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [localState, setLocalState] = useState(createInitialState());
-  const state = initialState ?? localState;
+  const [optimisticState, setOptimisticState] = useState<GymitionState | null>(null);
+  const lastServerStateRef = useRef(initialState);
+  const state = optimisticState ?? initialState ?? localState;
   const [draftEntry, setDraftEntry] = useState({
     ...defaultDraftEntry,
     exerciseId: exercises[0]?.id ?? defaultDraftEntry.exerciseId,
   });
   const [draftEntries, setDraftEntries] = useState<WorkoutEntry[]>([]);
+  const [workoutMode, setWorkoutMode] = useState<"detailed" | "simple">("detailed");
+  const [simpleDurationMinutes, setSimpleDurationMinutes] = useState(30);
+  const [simpleWorkoutNotes, setSimpleWorkoutNotes] = useState("");
   const [lastSummary, setLastSummary] = useState<string | null>(null);
   const [dailyCheckinSummary, setDailyCheckinSummary] = useState<DailyCheckinSummary | null>(null);
   const [lifeCheckinSummary, setLifeCheckinSummary] = useState<LifeCheckinSummary | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingActions, setPendingActions] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    if (!dailyCheckinSummary) {
+    if (!initialState || lastServerStateRef.current === initialState) {
       return;
     }
 
-    const timeout = window.setTimeout(() => setDailyCheckinSummary(null), 2800);
-    return () => window.clearTimeout(timeout);
-  }, [dailyCheckinSummary]);
+    lastServerStateRef.current = initialState;
+    setOptimisticState(null);
+  }, [initialState]);
 
   useEffect(() => {
-    if (!lifeCheckinSummary) {
+    if (!lifeCheckinSummary || lifeCheckinSummary.todayCompleted) {
       return;
     }
 
@@ -207,35 +254,116 @@ export function GymitionPrototype({
     state.userRewards.some((userReward) => userReward.rewardId === reward.id && userReward.equippedAt),
   );
 
-  function runServerAction(action: () => Promise<void>) {
+  function markActionPending(key: string) {
+    setPendingActions((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+  }
+
+  function clearActionPending(key: string) {
+    setPendingActions((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+  }
+
+  function runServerAction(action: () => Promise<void>, key = "global") {
+    if (pendingActions.has(key)) {
+      return;
+    }
+
+    markActionPending(key);
     startTransition(async () => {
       try {
         setActionError(null);
         await action();
         router.refresh();
       } catch {
-        setActionError("操作沒有完成，請再試一次。");
+        setActionError("The action did not finish. Please try again.");
+        router.refresh();
+      } finally {
+        clearActionPending(key);
       }
     });
   }
 
+  function applyStateUpdate(updater: (current: GymitionState) => GymitionState) {
+    if (initialState) {
+      setOptimisticState((current) => updater(current ?? state));
+      return;
+    }
+
+    setLocalState(updater);
+  }
+
+  function clearWorkoutDraft() {
+    setDraftEntries([]);
+    setSimpleWorkoutNotes("");
+  }
+
   function claimDailyReward() {
-    if (actions.claimDailyReward) {
-      runServerAction(async () => {
-        const summary = await actions.claimDailyReward?.();
-        if (summary) {
-          setDailyCheckinSummary(summary);
-        }
-      });
-      return;
-    }
-
     const today = localDateKey();
-    if (state.user.lastLoginRewardDate === today) {
+    if (state.user.lastLoginRewardDate === today || pendingActions.has("daily-reward")) {
       return;
     }
 
-    setLocalState((current) => {
+    if (actions.claimDailyReward) {
+      const nextStreak = nextLoginStreak(state.user.lastLoginRewardDate, state.user.currentStreak);
+      const streakBonus = calculateStreakBonus(nextStreak);
+      const totalCoins = REWARD_RULES.dailyLogin.coins + streakBonus;
+      const summary = {
+        coins: totalCoins,
+        xp: REWARD_RULES.dailyLogin.xp,
+        streak: nextStreak,
+        streakBonus,
+      };
+
+      setDailyCheckinSummary(summary);
+      applyStateUpdate((current) => ({
+        ...current,
+        user: {
+          ...current.user,
+          coins: current.user.coins + totalCoins,
+          xp: current.user.xp + REWARD_RULES.dailyLogin.xp,
+          currentStreak: nextStreak,
+          lastLoginRewardDate: today,
+        },
+        dailyCheckins: [
+          {
+            id: createId("checkin"),
+            checkinDate: today,
+            streakDay: nextStreak,
+            coinsEarned: REWARD_RULES.dailyLogin.coins,
+            xpEarned: REWARD_RULES.dailyLogin.xp,
+            streakBonusCoins: streakBonus,
+            createdAt: new Date().toISOString(),
+          },
+          ...current.dailyCheckins,
+        ],
+        coinLedger: [
+          ...current.coinLedger,
+          createLedgerEntry(REWARD_RULES.dailyLogin.coins, "daily_login", "login", today),
+          createLedgerEntry(streakBonus, "streak_bonus", "login", today),
+        ],
+        xpLedger: [
+          ...current.xpLedger,
+          createLedgerEntry(REWARD_RULES.dailyLogin.xp, "daily_login", "login", today),
+        ],
+      }));
+
+      runServerAction(async () => {
+        const serverSummary = await actions.claimDailyReward?.();
+        if (serverSummary) {
+          setDailyCheckinSummary(serverSummary);
+        }
+      }, "daily-reward");
+      return;
+    }
+
+    applyStateUpdate((current) => {
       const nextStreak = nextLoginStreak(current.user.lastLoginRewardDate, current.user.currentStreak);
       const streakBonus = calculateStreakBonus(nextStreak);
       const coinLedger: LedgerEntry[] = [
@@ -255,6 +383,18 @@ export function GymitionPrototype({
           currentStreak: nextStreak,
           lastLoginRewardDate: today,
         },
+        dailyCheckins: [
+          {
+            id: createId("checkin"),
+            checkinDate: today,
+            streakDay: nextStreak,
+            coinsEarned: REWARD_RULES.dailyLogin.coins,
+            xpEarned: REWARD_RULES.dailyLogin.xp,
+            streakBonusCoins: streakBonus,
+            createdAt: new Date().toISOString(),
+          },
+          ...current.dailyCheckins,
+        ],
         coinLedger: [...current.coinLedger, ...coinLedger],
         xpLedger: [...current.xpLedger, ...xpLedger],
       };
@@ -285,98 +425,83 @@ export function GymitionPrototype({
   }
 
   function completeWorkout() {
-    if (draftEntries.length === 0) {
+    const simpleDurationSeconds = clampInteger(simpleDurationMinutes, 1, 24 * 60) * 60;
+    if (pendingActions.has("workout")) {
       return;
     }
+
+    if (workoutMode === "detailed" && draftEntries.length === 0) {
+      return;
+    }
+
+    if (workoutMode === "simple" && simpleDurationSeconds < 60) {
+      return;
+    }
+
+    const submittedMode = workoutMode;
+    const submittedEntries = [...draftEntries];
+    const submittedDurationSeconds = simpleDurationSeconds;
+    const submittedNotes = simpleWorkoutNotes;
+    const optimisticNow = new Date().toISOString();
+    const optimisticWorkoutId = createId("workout");
+
+    applyStateUpdate((current) =>
+      applyCompletedWorkoutState(current, {
+        id: optimisticWorkoutId,
+        mode: submittedMode,
+        entries: submittedMode === "detailed" ? submittedEntries : [],
+        durationSeconds: submittedMode === "simple" ? submittedDurationSeconds : undefined,
+        notes: submittedMode === "simple" ? submittedNotes.trim() || undefined : undefined,
+        completedAt: optimisticNow,
+        hasCardio: submittedEntries.some(
+          (entry) => exercises.find((exercise) => exercise.id === entry.exerciseId)?.category === "cardio",
+        ),
+      }),
+    );
+    const coinTotal =
+      (submittedMode === "detailed" ? submittedEntries.reduce((total, entry) => total + entry.coinsEarned, 0) : 0) +
+      REWARD_RULES.workoutCompleted.coins;
+    const xpTotal =
+      (submittedMode === "detailed" ? submittedEntries.reduce((total, entry) => total + entry.xpEarned, 0) : 0) +
+      REWARD_RULES.workoutCompleted.xp;
+    setLastSummary(`Workout complete: +${coinTotal} coins and +${xpTotal} XP before quest rewards.`);
+    clearWorkoutDraft();
 
     if (actions.completeWorkout) {
       runServerAction(async () => {
-        await actions.completeWorkout?.({
-          entries: draftEntries.map((entry) => ({
-            exerciseId: entry.exerciseId,
-            sets: entry.sets,
-            reps: entry.reps,
-            weight: entry.weight,
-            durationSeconds: entry.durationSeconds,
-            distanceMeters: entry.distanceMeters,
-            notes: entry.notes,
-          })),
-        });
-        setLastSummary("訓練完成。");
-        setDraftEntries([]);
-      });
+        if (submittedMode === "simple") {
+          await actions.completeWorkout?.({
+            mode: "simple",
+            durationSeconds: submittedDurationSeconds,
+            notes: submittedNotes,
+          });
+        } else {
+          await actions.completeWorkout?.({
+            mode: "detailed",
+            entries: submittedEntries.map((entry) => ({
+              exerciseId: entry.exerciseId,
+              sets: entry.sets,
+              reps: entry.reps,
+              weight: entry.weight,
+              durationSeconds: entry.durationSeconds,
+              distanceMeters: entry.distanceMeters,
+              notes: entry.notes,
+            })),
+          });
+        }
+        setLastSummary("Workout complete.");
+      }, "workout");
       return;
     }
-
-    setLocalState((current) => {
-      const now = new Date().toISOString();
-      const workoutId = createId("workout");
-      const exerciseCoins = draftEntries.reduce((total, entry) => total + entry.coinsEarned, 0);
-      const exerciseXp = draftEntries.reduce((total, entry) => total + entry.xpEarned, 0);
-      const workoutCoins = exerciseCoins + REWARD_RULES.workoutCompleted.coins;
-      const workoutXp = exerciseXp + REWARD_RULES.workoutCompleted.xp;
-      const workout: WorkoutSession = {
-        id: workoutId,
-        status: "completed",
-        startedAt: now,
-        completedAt: now,
-        entries: draftEntries,
-        totalCoinsEarned: workoutCoins,
-        totalXpEarned: workoutXp,
-      };
-      const entryCoinLedger = draftEntries.map((entry) =>
-        createLedgerEntry(entry.coinsEarned, "exercise_logged", "workout_entry", entry.id),
-      );
-      const entryXpLedger = draftEntries.map((entry) =>
-        createLedgerEntry(entry.xpEarned, "exercise_logged", "workout_entry", entry.id),
-      );
-
-      const rewardedWorkoutState: GymitionState = {
-        ...current,
-        user: {
-          ...current.user,
-          coins: current.user.coins + workoutCoins,
-          xp: current.user.xp + workoutXp,
-        },
-        workouts: [...current.workouts, workout],
-        coinLedger: [
-          ...current.coinLedger,
-          ...entryCoinLedger,
-          createLedgerEntry(REWARD_RULES.workoutCompleted.coins, "workout_completed", "workout", workoutId),
-        ],
-        xpLedger: [
-          ...current.xpLedger,
-          ...entryXpLedger,
-          createLedgerEntry(REWARD_RULES.workoutCompleted.xp, "workout_completed", "workout", workoutId),
-        ],
-      };
-
-      return applyAutoQuestRewards(rewardedWorkoutState);
-    });
-
-    const coinTotal =
-      draftEntries.reduce((total, entry) => total + entry.coinsEarned, 0) +
-      REWARD_RULES.workoutCompleted.coins;
-    const xpTotal =
-      draftEntries.reduce((total, entry) => total + entry.xpEarned, 0) +
-      REWARD_RULES.workoutCompleted.xp;
-    setLastSummary(`訓練完成：任務獎勵前獲得 +${coinTotal} 金幣、+${xpTotal} XP。`);
-    setDraftEntries([]);
   }
 
   function purchaseReward(reward: Reward) {
-    if (actions.purchaseReward) {
-      runServerAction(async () => {
-        await actions.purchaseReward?.({ rewardId: reward.id });
-      });
+    const actionKey = `reward-${reward.id}`;
+    if (state.user.coins < reward.cost || ownedRewardIds.has(reward.id) || pendingActions.has(actionKey)) {
       return;
     }
 
-    if (state.user.coins < reward.cost || ownedRewardIds.has(reward.id)) {
-      return;
-    }
-
-    setLocalState((current) => ({
+    applyStateUpdate((current) => ({
       ...current,
       user: {
         ...current.user,
@@ -395,6 +520,12 @@ export function GymitionPrototype({
         createLedgerEntry(-reward.cost, "reward_purchase", "reward", reward.id),
       ],
     }));
+
+    if (actions.purchaseReward) {
+      runServerAction(async () => {
+        await actions.purchaseReward?.({ rewardId: reward.id });
+      }, actionKey);
+    }
   }
 
   function resetDemo() {
@@ -406,66 +537,89 @@ export function GymitionPrototype({
     const freshState = createInitialState();
     setLocalState(freshState);
     setDraftEntries([]);
+    setWorkoutMode("detailed");
+    setSimpleDurationMinutes(30);
+    setSimpleWorkoutNotes("");
     setLastSummary(null);
   }
 
   function saveProfile(username: string) {
-    if (actions.updateProfile) {
-      runServerAction(async () => {
-        await actions.updateProfile?.({ username });
-      });
+    if (pendingActions.has("profile")) {
       return;
     }
 
-    setLocalState((current) => ({
+    applyStateUpdate((current) => ({
       ...current,
       user: {
         ...current.user,
         username,
       },
     }));
+
+    if (actions.updateProfile) {
+      runServerAction(async () => {
+        await actions.updateProfile?.({ username });
+      }, "profile");
+      return;
+    }
   }
 
-  function setWeeklyGoal(input: { workoutTarget: number; cardioTarget: number }) {
-    if (actions.setWeeklyGoal) {
-      runServerAction(async () => {
-        await actions.setWeeklyGoal?.(input);
-      });
+  function resetProfileData() {
+    if (pendingActions.has("reset-profile")) {
       return;
     }
 
-    setLocalState((current) => ({
+    applyStateUpdate((current) => resetAppDataState(current));
+    setDraftEntries([]);
+    setWorkoutMode("detailed");
+    setSimpleDurationMinutes(30);
+    setSimpleWorkoutNotes("");
+    setLastSummary(null);
+
+    if (actions.resetProfileData) {
+      runServerAction(async () => {
+        await actions.resetProfileData?.();
+      }, "reset-profile");
+      return;
+    }
+  }
+
+  function setWeeklyGoal(input: { workoutTarget: number; cardioTarget: number }) {
+    if (pendingActions.has("weekly-goal")) {
+      return;
+    }
+
+    applyStateUpdate((current) => ({
       ...current,
       weeklyGoal: {
-        id: "local_weekly_goal",
-        weekStart: localDateKey(),
+        id: current.weeklyGoal?.id ?? "optimistic_weekly_goal",
+        weekStart: current.weeklyGoal?.weekStart ?? localDateKey(),
         workoutTarget: input.workoutTarget,
         cardioTarget: input.cardioTarget,
       },
     }));
+
+    if (actions.setWeeklyGoal) {
+      runServerAction(async () => {
+        await actions.setWeeklyGoal?.(input);
+      }, "weekly-goal");
+      return;
+    }
   }
 
   function checkinLifeHabit(habitType: LifeHabitType) {
-    if (actions.checkinLifeHabit) {
-      runServerAction(async () => {
-        const summary = await actions.checkinLifeHabit?.({ habitType });
-        if (summary) {
-          setLifeCheckinSummary(summary);
-        }
-      });
-      return;
-    }
-
     const today = localDateKey();
+    const actionKey = `life-${habitType}`;
     const alreadyCompleted = state.lifeHabitCheckins.some(
       (checkin) => checkin.checkinDate === today && checkin.habitType === habitType,
     );
 
-    if (alreadyCompleted) {
+    if (alreadyCompleted || pendingActions.has(actionKey)) {
       return;
     }
 
-    setLocalState((current) => {
+    let optimisticSummary: LifeCheckinSummary | null = null;
+    applyStateUpdate((current) => {
       const nextCheckins: LifeHabitCheckin[] = [
         ...current.lifeHabitCheckins,
         {
@@ -484,7 +638,7 @@ export function GymitionPrototype({
         streak: calculateLifeStreak(nextCheckins),
       };
 
-      setLifeCheckinSummary(summary);
+      optimisticSummary = summary;
 
       return {
         ...current,
@@ -496,6 +650,19 @@ export function GymitionPrototype({
         },
       };
     });
+
+    if (optimisticSummary) {
+      setLifeCheckinSummary(optimisticSummary);
+    }
+
+    if (actions.checkinLifeHabit) {
+      runServerAction(async () => {
+        const summary = await actions.checkinLifeHabit?.({ habitType });
+        if (summary) {
+          setLifeCheckinSummary(summary);
+        }
+      }, actionKey);
+    }
   }
 
   return (
@@ -506,7 +673,7 @@ export function GymitionPrototype({
       streak={state.user.currentStreak}
       username={state.user.username}
       onReset={resetDemo}
-      resetLabel={initialState ? "重新整理資料" : "重置示範資料"}
+      resetLabel={initialState ? "Refresh data" : "Reset demo data"}
     >
       {initialView === "dashboard" && (
         <DashboardView
@@ -515,10 +682,10 @@ export function GymitionPrototype({
           questProgress={questProgress}
           recentLedger={recentLedger}
           onClaimDailyReward={claimDailyReward}
-          dailyClaimed={state.user.lastLoginRewardDate === localDateKey() || isPending}
+          dailyClaimed={state.user.lastLoginRewardDate === localDateKey() || pendingActions.has("daily-reward")}
           quests={quests}
           onSetWeeklyGoal={setWeeklyGoal}
-          goalPending={isPending}
+          goalPending={pendingActions.has("weekly-goal")}
         />
       )}
 
@@ -528,7 +695,13 @@ export function GymitionPrototype({
           draftEntries={draftEntries}
           exercises={exercises}
           lastSummary={lastSummary}
+          mode={workoutMode}
+          simpleDurationMinutes={simpleDurationMinutes}
+          simpleNotes={simpleWorkoutNotes}
           setDraftEntry={setDraftEntry}
+          setMode={setWorkoutMode}
+          setSimpleDurationMinutes={setSimpleDurationMinutes}
+          setSimpleNotes={setSimpleWorkoutNotes}
           onAddEntry={addDraftEntry}
           onRemoveEntry={(entryId) =>
             setDraftEntries((entries) => entries.filter((entry) => entry.id !== entryId))
@@ -552,7 +725,7 @@ export function GymitionPrototype({
         <LifeView
           checkins={state.lifeHabitCheckins}
           summary={state.lifeSummary}
-          pending={isPending}
+          pendingActions={pendingActions}
           onCheckin={checkinLifeHabit}
         />
       )}
@@ -565,53 +738,88 @@ export function GymitionPrototype({
           ownedRewardIds={ownedRewardIds}
           rewards={rewards}
           onSaveProfile={saveProfile}
+          onResetProfileData={resetProfileData}
+          resetPending={pendingActions.has("reset-profile")}
         />
       )}
       {dailyCheckinSummary && (
-        <div className="checkin-toast" role="status" aria-live="polite">
-          <div className="checkin-toast-icon">
-            <CheckCircle2 size={28} aria-hidden />
-          </div>
-          <div>
-            <strong>簽到完成</strong>
-            <span>
-              +{dailyCheckinSummary.coins} 金幣 · +{dailyCheckinSummary.xp} XP · 連續 {dailyCheckinSummary.streak} 天
-            </span>
-          </div>
-        </div>
+        <StreakCelebration
+          title="Gym streak complete"
+          label="Gym streak"
+          streak={dailyCheckinSummary.streak}
+          detail={`+${dailyCheckinSummary.coins} coins · +${dailyCheckinSummary.xp} XP`}
+          onDismiss={() => setDailyCheckinSummary(null)}
+        />
       )}
-      {lifeCheckinSummary && (
+      {lifeCheckinSummary?.todayCompleted && (
+        <StreakCelebration
+          title="Life streak complete"
+          label="Life streak"
+          streak={lifeCheckinSummary.streak}
+          detail="Face washed · Teeth brushed"
+          onDismiss={() => setLifeCheckinSummary(null)}
+        />
+      )}
+      {lifeCheckinSummary && !lifeCheckinSummary.todayCompleted && (
         <div
-          className={lifeCheckinSummary.todayCompleted ? "checkin-toast life-complete" : "checkin-toast"}
+          className="checkin-toast"
           role="status"
           aria-live="polite"
         >
           <div className="checkin-toast-icon">
-            {lifeCheckinSummary.todayCompleted ? (
-              <HeartPulse size={28} aria-hidden />
-            ) : (
-              <BadgeCheck size={28} aria-hidden />
-            )}
+            <BadgeCheck size={28} aria-hidden />
           </div>
           <div>
-            <strong>{lifeCheckinSummary.todayCompleted ? "Life 簽到完成" : `${lifeHabitMeta[lifeCheckinSummary.habitType].label}完成`}</strong>
-            <span>
-              {lifeCheckinSummary.todayCompleted
-                ? `兩項都完成 · Life 連續 ${lifeCheckinSummary.streak} 天`
-                : `今日進度 ${lifeCheckinSummary.todayCompletedCount}/2`}
-            </span>
+            <strong>{lifeHabitMeta[lifeCheckinSummary.habitType].label} complete</strong>
+            <span>Today&apos;s progress: {lifeCheckinSummary.todayCompletedCount}/2</span>
           </div>
         </div>
       )}
       {actionError && (
         <div className="checkin-toast error" role="status" aria-live="polite">
           <div>
-            <strong>操作失敗</strong>
+            <strong>Action failed</strong>
             <span>{actionError}</span>
           </div>
         </div>
       )}
     </AppShell>
+  );
+}
+
+function StreakCelebration({
+  title,
+  label,
+  streak,
+  detail,
+  onDismiss,
+}: {
+  title: string;
+  label: string;
+  streak: number;
+  detail: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="streak-celebration-backdrop" role="presentation" onClick={onDismiss}>
+      <section
+        className="streak-celebration"
+        role="status"
+        aria-live="polite"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button className="streak-dismiss" type="button" aria-label="Dismiss streak popup" onClick={onDismiss}>
+          <X size={16} aria-hidden />
+        </button>
+        <div className="streak-checkmark" aria-hidden>
+          <Check size={42} />
+        </div>
+        <p className="section-label">{title}</p>
+        <h2>{streak} days</h2>
+        <strong>{label}</strong>
+        <span>{detail}</span>
+      </section>
+    </div>
   );
 }
 
@@ -638,40 +846,39 @@ function DashboardView({
 }) {
   const completedQuestCount = questProgress.filter((item) => item.completed).length;
   const totalQuestCount = quests.length;
-  const quote = motivationalQuotes[getDailyQuoteIndex(localDateKey())];
+  const quote = motivationalQuotes[getQuoteIndex()];
 
   return (
     <div className="home-layout">
       <section className="hero-command">
         <div className="hero-copy">
-          <span className="today-line">今日訓練提醒</span>
           <h2>{quote.line}</h2>
           <p>{quote.note}</p>
         </div>
         <div className="hero-actions">
           <a className="start-workout-action" href="/workout">
             <Dumbbell size={20} aria-hidden />
-            開始訓練
+            Start workout
             <ArrowRight size={18} aria-hidden />
           </a>
           <button className="daily-reward-row" type="button" onClick={onClaimDailyReward} disabled={dailyClaimed}>
             <Gift size={20} aria-hidden />
             <span>
-              <strong>{dailyClaimed ? "每日獎勵已領取" : "領取每日獎勵"}</strong>
+              <strong>{dailyClaimed ? "Daily reward claimed" : "Claim daily reward"}</strong>
               <small>
                 {dailyClaimed
-                  ? "明天再回來延續連續天數"
-                  : `+${REWARD_RULES.dailyLogin.coins} 金幣、+${REWARD_RULES.dailyLogin.xp} XP`}
+                  ? "Come back tomorrow to keep the streak alive"
+                  : `+${REWARD_RULES.dailyLogin.coins} coins, +${REWARD_RULES.dailyLogin.xp} XP`}
               </small>
             </span>
           </button>
         </div>
       </section>
 
-      <section className="status-strip" aria-label="目前進度">
-        <StatTile label="金幣" value={state.user.coins.toString()} icon={<CircleDollarSign size={19} />} />
-        <StatTile label="等級" value={`${level}`} icon={<Sparkles size={19} />} />
-        <StatTile label="連續" value={`${state.user.currentStreak} 天`} icon={<Flame size={19} />} />
+      <section className="status-strip" aria-label="Current progress">
+        <StatTile label="Coins" value={state.user.coins.toString()} icon={<CircleDollarSign size={19} />} />
+        <StatTile label="Level" value={`${level}`} icon={<Sparkles size={19} />} />
+        <StatTile label="Streak" value={`${state.user.currentStreak} days`} icon={<Flame size={19} />} />
       </section>
 
       <div className="workbench-grid">
@@ -686,13 +893,13 @@ function DashboardView({
           <section className="activity-panel">
             <div className="section-heading">
               <div>
-                <p className="section-label">最近活動</p>
-                <h2>最近獎勵</h2>
+                <p className="section-label">Recent activity</p>
+                <h2>Latest rewards</h2>
               </div>
             </div>
             <div className="ledger-list">
               {recentLedger.length === 0 ? (
-                <p className="empty-copy">尚無紀錄。</p>
+                <p className="empty-copy">No activity yet.</p>
               ) : (
                 recentLedger.slice(0, 3).map((entry) => (
                   <div className="ledger-row" key={entry.id}>
@@ -709,8 +916,8 @@ function DashboardView({
           <section className="today-panel">
             <div className="rail-heading">
               <div>
-                <p className="section-label">今日任務</p>
-                <h2>{completedQuestCount}/{totalQuestCount} 已完成</h2>
+                <p className="section-label">Daily quests</p>
+                <h2>{completedQuestCount}/{totalQuestCount} complete</h2>
               </div>
               <CalendarDays size={18} aria-hidden />
             </div>
@@ -746,12 +953,12 @@ function DashboardView({
 function LifeView({
   checkins,
   summary,
-  pending,
+  pendingActions,
   onCheckin,
 }: {
   checkins: LifeHabitCheckin[];
   summary: GymitionState["lifeSummary"];
-  pending: boolean;
+  pendingActions: Set<string>;
   onCheckin: (habitType: LifeHabitType) => void;
 }) {
   const today = localDateKey();
@@ -759,7 +966,7 @@ function LifeView({
   const habitsByDate = useMemo(() => getLifeHabitMap(checkins), [checkins]);
   const todayHabits = habitsByDate.get(today);
   const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
-  const monthTitle = new Intl.DateTimeFormat("zh-TW", {
+  const monthTitle = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "long",
   }).format(visibleMonth);
@@ -768,32 +975,37 @@ function LifeView({
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
   }
 
+  function jumpToToday() {
+    setVisibleMonth(new Date(`${today}T00:00:00`));
+  }
+
   return (
     <div className="life-layout">
       <section className="life-hero">
         <div>
           <p className="section-label">Life streak</p>
-          <h2>{summary.todayCompleted ? "今天的生活簽到完成" : "把今天的兩件小事打勾"}</h2>
-          <p>洗臉和刷牙都完成，才會延續 Life streak。</p>
+          <h2>{summary.todayCompleted ? "Today's life check-in is complete" : "Check off both daily basics"}</h2>
+          <p>Wash your face and brush your teeth to extend your Life streak.</p>
         </div>
-        <div className="life-scoreboard" aria-label="Life streak 狀態">
+        <div className="life-scoreboard" aria-label="Life streak status">
           <div>
             <Flame size={20} aria-hidden />
-            <span>連續</span>
-            <strong>{summary.streak} 天</strong>
+            <span>Streak</span>
+            <strong>{summary.streak} days</strong>
           </div>
           <div>
             <CheckCircle2 size={20} aria-hidden />
-            <span>今日</span>
+            <span>Today</span>
             <strong>{summary.todayCompletedCount}/2</strong>
           </div>
         </div>
       </section>
 
-      <section className="life-checkin-grid" aria-label="今日生活簽到">
+      <section className="life-checkin-grid" aria-label="Today's life check-ins">
         {(["face_wash", "tooth_brush"] as const).map((habitType) => {
           const meta = lifeHabitMeta[habitType];
           const completed = todayHabits?.has(habitType) ?? false;
+          const pending = pendingActions.has(`life-${habitType}`);
           const Icon = meta.Icon;
 
           return (
@@ -809,7 +1021,7 @@ function LifeView({
               </span>
               <span>
                 <strong>{meta.label}</strong>
-                <small>{completed ? "今天已簽到" : meta.note}</small>
+                <small>{completed ? "Checked in today" : meta.note}</small>
               </span>
             </button>
           );
@@ -823,17 +1035,20 @@ function LifeView({
             <h2>{monthTitle}</h2>
           </div>
           <div className="calendar-controls">
-            <button className="icon-button" type="button" aria-label="上一個月" onClick={() => shiftMonth(-1)}>
+            <button className="ghost-light-action compact-action" type="button" onClick={jumpToToday}>
+              Today
+            </button>
+            <button className="icon-button" type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)}>
               <ChevronLeft size={16} aria-hidden />
             </button>
-            <button className="icon-button" type="button" aria-label="下一個月" onClick={() => shiftMonth(1)}>
+            <button className="icon-button" type="button" aria-label="Next month" onClick={() => shiftMonth(1)}>
               <ChevronRight size={16} aria-hidden />
             </button>
           </div>
         </div>
 
         <div className="life-calendar-grid" aria-label="Life habit calendar">
-          {["一", "二", "三", "四", "五", "六", "日"].map((weekday) => (
+          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((weekday) => (
             <span className="calendar-weekday" key={weekday}>
               {weekday}
             </span>
@@ -900,12 +1115,12 @@ function WeeklyGoalPanel({
     <section className="weekly-goal-panel">
       <div className="section-heading">
         <div>
-          <p className="section-label">本週目標</p>
-          <h2>{state.weeklyGoal ? "追蹤訓練節奏" : "設定你的週目標"}</h2>
+          <p className="section-label">Weekly goals</p>
+          <h2>{state.weeklyGoal ? "Track your training rhythm" : "Set your weekly targets"}</h2>
         </div>
         {state.weeklyGoal && !editing && (
           <button className="ghost-light-action compact-action" type="button" onClick={() => setEditing(true)}>
-            編輯
+            Edit
           </button>
         )}
       </div>
@@ -913,7 +1128,7 @@ function WeeklyGoalPanel({
       {editing ? (
         <div className="weekly-goal-form">
           <label>
-            健身次數
+            Workouts
             <input
               min="1"
               max="14"
@@ -923,7 +1138,7 @@ function WeeklyGoalPanel({
             />
           </label>
           <label>
-            有氧次數
+            Cardio sessions
             <input
               min="0"
               max="14"
@@ -933,13 +1148,13 @@ function WeeklyGoalPanel({
             />
           </label>
           <button className="primary-action compact-action" type="button" onClick={saveGoal} disabled={pending}>
-            儲存目標
+            Save goals
           </button>
         </div>
       ) : (
         <div className="weekly-goal-progress">
-          <GoalMeter label="健身" value={workoutProgress} target={workoutTarget} />
-          <GoalMeter label="有氧" value={cardioProgress} target={cardioTarget} />
+          <GoalMeter label="Workouts" value={workoutProgress} target={workoutTarget} />
+          <GoalMeter label="Cardio" value={cardioProgress} target={cardioTarget} />
         </div>
       )}
     </section>
@@ -953,7 +1168,7 @@ function GoalMeter({ label, value, target }: { label: string; value: number; tar
     <div className="goal-meter-row">
       <div>
         <strong>{label}</strong>
-        <span>{target === 0 ? "不設定" : `${value}/${target}`}</span>
+        <span>{target === 0 ? "Not set" : `${value}/${target}`}</span>
       </div>
       <div className="meter compact">
         <span style={{ width: `${Math.min(percent, 100)}%` }} />
@@ -967,7 +1182,13 @@ function WorkoutView({
   draftEntries,
   exercises,
   lastSummary,
+  mode,
+  simpleDurationMinutes,
+  simpleNotes,
   setDraftEntry,
+  setMode,
+  setSimpleDurationMinutes,
+  setSimpleNotes,
   onAddEntry,
   onRemoveEntry,
   onCompleteWorkout,
@@ -976,13 +1197,20 @@ function WorkoutView({
   draftEntries: WorkoutEntry[];
   exercises: Exercise[];
   lastSummary: string | null;
+  mode: "detailed" | "simple";
+  simpleDurationMinutes: number;
+  simpleNotes: string;
   setDraftEntry: React.Dispatch<React.SetStateAction<DraftEntry>>;
+  setMode: (mode: "detailed" | "simple") => void;
+  setSimpleDurationMinutes: (minutes: number) => void;
+  setSimpleNotes: (notes: string) => void;
   onAddEntry: () => void;
   onRemoveEntry: (entryId: string) => void;
   onCompleteWorkout: () => void;
 }) {
   const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false);
   const selectedExercise = exercises.find((exercise) => exercise.id === draftEntry.exerciseId) ?? exercises[0];
+  const canFinish = mode === "simple" ? simpleDurationMinutes >= 1 : draftEntries.length > 0;
 
   function submitEntry() {
     onAddEntry();
@@ -993,83 +1221,142 @@ function WorkoutView({
     <div className="workout-layout">
       <section className="workout-toolbar">
         <div>
-          <p className="section-label">目前訓練</p>
-          <h2>{draftEntries.length === 0 ? "準備開始紀錄" : `已加入 ${draftEntries.length} 個動作`}</h2>
+          <p className="section-label">Current workout</p>
+          <h2>
+            {mode === "simple"
+              ? `${simpleDurationMinutes || 0} minute session`
+              : draftEntries.length === 0
+                ? "Ready to start logging"
+                : `${draftEntries.length} exercises added`}
+          </h2>
         </div>
-        <button className="round-add-action" type="button" onClick={() => setIsAddExerciseOpen(true)}>
-          <Plus size={20} aria-hidden />
-          新增動作
-        </button>
+        <div className="workout-toolbar-actions">
+          <div className="mode-switch" role="group" aria-label="Workout logging mode">
+            <button
+              className={mode === "detailed" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("detailed")}
+            >
+              Detailed
+            </button>
+            <button
+              className={mode === "simple" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("simple")}
+            >
+              Simple time
+            </button>
+          </div>
+          {mode === "detailed" && (
+            <button className="round-add-action" type="button" onClick={() => setIsAddExerciseOpen(true)}>
+              <Plus size={20} aria-hidden />
+              Add exercise
+            </button>
+          )}
+        </div>
       </section>
 
       <section className="workout-list-surface">
-        <div className="workout-list-head">
-          <span>動作</span>
-          <span>內容</span>
-          <span>獎勵</span>
-          <span aria-hidden />
-        </div>
-        <div className="entry-list workout-entry-list">
-          {draftEntries.length === 0 ? (
-            <button className="empty-workout-row" type="button" onClick={() => setIsAddExerciseOpen(true)}>
-              <Plus size={20} aria-hidden />
-              <strong>加入第一個動作</strong>
-            </button>
-          ) : (
-            draftEntries.map((entry) => {
-              const exercise = exercises.find((item) => item.id === entry.exerciseId);
-              return (
-                <div className="workout-entry-row" key={entry.id}>
-                  <div className="workout-entry-main">
-                    {exercise && <span className="item-type-badge">{categoryLabel(exercise.category)}</span>}
-                    <strong>{exercise?.name}</strong>
-                  </div>
-                  <span>{formatEntry(entry)}</span>
-                  <span>+{entry.coinsEarned} 金幣 / +{entry.xpEarned} XP</span>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    aria-label={`移除 ${exercise?.name}`}
-                    onClick={() => onRemoveEntry(entry.id)}
-                  >
-                    <Trash2 size={16} aria-hidden />
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
+        {mode === "detailed" ? (
+          <>
+            <div className="workout-list-head">
+              <span>Exercise</span>
+              <span>Details</span>
+              <span>Rewards</span>
+              <span aria-hidden />
+            </div>
+            <div className="entry-list workout-entry-list">
+              {draftEntries.length === 0 ? (
+                <button className="empty-workout-row" type="button" onClick={() => setIsAddExerciseOpen(true)}>
+                  <Plus size={20} aria-hidden />
+                  <strong>Add your first exercise</strong>
+                </button>
+              ) : (
+                draftEntries.map((entry) => {
+                  const exercise = exercises.find((item) => item.id === entry.exerciseId);
+                  return (
+                    <div className="workout-entry-row" key={entry.id}>
+                      <div className="workout-entry-main">
+                        {exercise && <span className="item-type-badge">{categoryLabel(exercise.category)}</span>}
+                        <strong>{exercise?.name}</strong>
+                      </div>
+                      <span>{formatEntry(entry)}</span>
+                      <span>+{entry.coinsEarned} coins / +{entry.xpEarned} XP</span>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        aria-label={`Remove ${exercise?.name}`}
+                        onClick={() => onRemoveEntry(entry.id)}
+                      >
+                        <Trash2 size={16} aria-hidden />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="simple-workout-panel">
+            <div className="simple-workout-icon">
+              <Clock3 size={22} aria-hidden />
+            </div>
+            <label>
+              Workout length
+              <input
+                min="1"
+                max="1440"
+                type="number"
+                value={simpleDurationMinutes}
+                onChange={(event) => setSimpleDurationMinutes(Number(event.target.value))}
+              />
+            </label>
+            <label className="simple-notes-field">
+              Notes
+              <input
+                value={simpleNotes}
+                onChange={(event) => setSimpleNotes(event.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+          </div>
+        )}
         {lastSummary && <p className="success-copy">{lastSummary}</p>}
+        <div className="workout-footer">
+          <span>
+            {mode === "simple"
+              ? "Simple sessions count as completed workouts."
+              : draftEntries.length === 0
+                ? "No exercises added yet"
+                : "Coins, XP, and quests settle automatically."}
+          </span>
+          <button
+            className="complete-action compact-action"
+            type="button"
+            onClick={onCompleteWorkout}
+            disabled={!canFinish}
+          >
+            Finish
+          </button>
+        </div>
       </section>
-
-      <div className="workout-footer">
-        <span>{draftEntries.length === 0 ? "尚未加入動作" : "完成後會自動結算金幣、XP 與任務。"}</span>
-        <button
-          className="complete-action"
-          type="button"
-          onClick={onCompleteWorkout}
-          disabled={draftEntries.length === 0}
-        >
-          完成訓練
-        </button>
-      </div>
 
       {isAddExerciseOpen && (
         <div className="modal-backdrop" role="presentation">
           <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="add-exercise-title">
             <div className="modal-head">
               <div>
-                <p className="section-label">新增動作</p>
-                <h2 id="add-exercise-title">紀錄一個訓練項目</h2>
+                <p className="section-label">Add exercise</p>
+                <h2 id="add-exercise-title">Log one training item</h2>
               </div>
-              <button className="icon-button" type="button" aria-label="關閉" onClick={() => setIsAddExerciseOpen(false)}>
+              <button className="icon-button" type="button" aria-label="Close" onClick={() => setIsAddExerciseOpen(false)}>
                 <X size={16} aria-hidden />
               </button>
             </div>
 
             <div className="form-grid">
               <label>
-                動作
+                Exercise
                 <select
                   value={draftEntry.exerciseId}
                   onChange={(event) =>
@@ -1086,7 +1373,7 @@ function WorkoutView({
 
               {usesSets(selectedExercise) && (
                 <label>
-                  組數
+                  Sets
                   <input
                     min="1"
                     type="number"
@@ -1100,7 +1387,7 @@ function WorkoutView({
 
               {usesReps(selectedExercise) && (
                 <label>
-                  次數
+                  Reps
                   <input
                     min="1"
                     type="number"
@@ -1114,7 +1401,7 @@ function WorkoutView({
 
               {selectedExercise.measurementType === "reps_weight" && (
                 <label>
-                  重量
+                  Weight
                   <input
                     min="0"
                     type="number"
@@ -1128,7 +1415,7 @@ function WorkoutView({
 
               {selectedExercise.measurementType === "duration" && (
                 <label>
-                  分鐘
+                  Minutes
                   <input
                     min="1"
                     type="number"
@@ -1141,24 +1428,24 @@ function WorkoutView({
               )}
 
               <label className="wide-field">
-                備註
+                Notes
                 <input
                   value={draftEntry.notes}
                   onChange={(event) =>
                     setDraftEntry((current) => ({ ...current, notes: event.target.value }))
                   }
-                  placeholder="選填"
+                  placeholder="Optional"
                 />
               </label>
             </div>
 
             <div className="modal-actions">
               <button className="ghost-light-action" type="button" onClick={() => setIsAddExerciseOpen(false)}>
-                取消
+                Cancel
               </button>
               <button className="primary-action" type="button" onClick={submitEntry}>
                 <Plus size={18} aria-hidden />
-                加入清單
+                Add to list
               </button>
             </div>
           </section>
@@ -1169,7 +1456,7 @@ function WorkoutView({
 }
 
 function HistoryView({ workouts, exercises }: { workouts: WorkoutSession[]; exercises: Exercise[] }) {
-  const completedWorkouts = [...workouts].reverse();
+  const completedWorkouts = [...workouts].sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
 
   return (
@@ -1177,13 +1464,13 @@ function HistoryView({ workouts, exercises }: { workouts: WorkoutSession[]; exer
       <section className="history-list-surface">
         <div className="section-heading">
           <div>
-            <p className="section-label">已完成訓練</p>
-            <h2>歷史紀錄</h2>
+            <p className="section-label">Completed workouts</p>
+            <h2>History</h2>
           </div>
         </div>
         <div className="history-list">
           {completedWorkouts.length === 0 ? (
-            <p className="empty-copy">完成訓練後會顯示在這裡。</p>
+            <p className="empty-copy">Completed workouts will show up here.</p>
           ) : (
             completedWorkouts.map((workout) => {
               const expanded = workout.id === expandedWorkoutId;
@@ -1191,16 +1478,11 @@ function HistoryView({ workouts, exercises }: { workouts: WorkoutSession[]; exer
                 <article className={expanded ? "history-record expanded" : "history-record"} key={workout.id}>
                   <div className="history-row">
                     <div className="history-row-main">
-                      <strong>{workout.completedAt ? formatShortDate(workout.completedAt) : "草稿"}</strong>
-                      <span>
-                        {workout.entries
-                          .map((entry) => exercises.find((exercise) => exercise.id === entry.exerciseId)?.name)
-                          .filter(Boolean)
-                          .join(", ")}
-                      </span>
+                      <strong>{workout.completedAt ? formatShortDate(workout.completedAt) : "Draft"}</strong>
+                      <span>{formatWorkoutSummary(workout, exercises)}</span>
                     </div>
                     <div className="history-rewards">
-                      <span>+{workout.totalCoinsEarned} 金幣</span>
+                      <span>+{workout.totalCoinsEarned} coins</span>
                       <span>+{workout.totalXpEarned} XP</span>
                     </div>
                     <button
@@ -1209,29 +1491,39 @@ function HistoryView({ workouts, exercises }: { workouts: WorkoutSession[]; exer
                       aria-expanded={expanded}
                       onClick={() => setExpandedWorkoutId(expanded ? null : workout.id)}
                     >
-                      {expanded ? "收合" : "詳情"}
+                      {expanded ? "Collapse" : "Details"}
                     </button>
                   </div>
                   {expanded && (
                     <div className="inline-history-detail">
                       <div className="detail-summary">
-                        <span>{workout.entries.length} 個動作</span>
-                        <span>+{workout.totalCoinsEarned} 金幣</span>
+                        <span>{workout.mode === "simple" ? "Simple time log" : `${workout.entries.length} exercises`}</span>
+                        <span>+{workout.totalCoinsEarned} coins</span>
                         <span>+{workout.totalXpEarned} XP</span>
                       </div>
                       <div className="detail-entry-list">
-                        {workout.entries.map((entry) => {
-                          const exercise = exercises.find((item) => item.id === entry.exerciseId);
-                          return (
-                            <div className="detail-entry-row" key={entry.id}>
-                              <div className="detail-entry-main">
-                                <strong>{exercise?.name}</strong>
-                                <span>{exercise ? categoryLabel(exercise.category) : ""}</span>
-                              </div>
-                              <span className="detail-entry-value">{formatEntry(entry)}</span>
+                        {workout.mode === "simple" ? (
+                          <div className="detail-entry-row">
+                            <div className="detail-entry-main">
+                              <strong>Session duration</strong>
+                              {workout.notes && <span>{workout.notes}</span>}
                             </div>
-                          );
-                        })}
+                            <span className="detail-entry-value">{formatDuration(workout.durationSeconds ?? 0)}</span>
+                          </div>
+                        ) : (
+                          workout.entries.map((entry) => {
+                            const exercise = exercises.find((item) => item.id === entry.exerciseId);
+                            return (
+                              <div className="detail-entry-row" key={entry.id}>
+                                <div className="detail-entry-main">
+                                  <strong>{exercise?.name}</strong>
+                                  <span>{exercise ? categoryLabel(exercise.category) : ""}</span>
+                                </div>
+                                <span className="detail-entry-value">{formatEntry(entry)}</span>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
                     </div>
                   )}
@@ -1260,10 +1552,10 @@ function RewardsView({
     <section className="shop-container">
       <div className="shop-head">
         <div>
-          <p className="section-label">獎勵商店</p>
-          <h2>用金幣換一點訓練樂趣</h2>
+          <p className="section-label">Reward shop</p>
+          <h2>Trade coins for training flair</h2>
         </div>
-        <strong>{coins} 金幣</strong>
+        <strong>{coins} coins</strong>
       </div>
       <div className="shop-list">
         {rewards.map((reward) => {
@@ -1278,14 +1570,14 @@ function RewardsView({
                 <p>{reward.description}</p>
               </div>
               <div className="shop-item-action">
-                <strong>{reward.cost} 金幣</strong>
+                <strong>{reward.cost} coins</strong>
                 <button
                   className="primary-action compact-action"
                   type="button"
                   disabled={owned || coins < reward.cost}
                   onClick={() => onPurchaseReward(reward)}
                 >
-                  {owned ? "已擁有" : "兌換"}
+                  {owned ? "Owned" : "Redeem"}
                 </button>
               </div>
             </div>
@@ -1303,6 +1595,8 @@ function ProfileView({
   ownedRewardIds,
   rewards,
   onSaveProfile,
+  onResetProfileData,
+  resetPending,
 }: {
   state: GymitionState;
   level: number;
@@ -1310,8 +1604,11 @@ function ProfileView({
   ownedRewardIds: Set<string>;
   rewards: Reward[];
   onSaveProfile: (username: string) => void;
+  onResetProfileData: () => void;
+  resetPending: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState(state.user.username);
   const ownedRewards = rewards.filter((reward) => ownedRewardIds.has(reward.id));
 
@@ -1328,15 +1625,20 @@ function ProfileView({
     setIsEditing(false);
   }
 
+  function confirmReset() {
+    onResetProfileData();
+    setIsResetConfirmOpen(false);
+  }
+
   return (
     <div className="player-profile">
       <section className="profile-hero">
         <div className="player-avatar">{state.user.username.slice(0, 2).toUpperCase()}</div>
         <div className="player-identity">
-          <p className="section-label">玩家檔案</p>
+          <p className="section-label">Player profile</p>
           {isEditing ? (
             <label className="profile-name-field">
-              顯示名稱
+              Display name
               <input
                 value={usernameDraft}
                 onChange={(event) => setUsernameDraft(event.target.value)}
@@ -1346,7 +1648,7 @@ function ProfileView({
           ) : (
             <>
               <h2>{state.user.username}</h2>
-              <p>{equippedReward?.metadata.title ?? "尚未裝備稱號"}</p>
+              <p>{equippedReward?.metadata.title ?? "No title equipped"}</p>
             </>
           )}
         </div>
@@ -1355,26 +1657,30 @@ function ProfileView({
             <>
               <button className="ghost-light-action" type="button" onClick={cancelEdit}>
                 <X size={16} aria-hidden />
-                取消
+                Cancel
               </button>
               <button className="primary-action compact-action" type="button" onClick={saveEdit}>
                 <Save size={16} aria-hidden />
-                儲存
+                Save
               </button>
             </>
           ) : (
             <button className="ghost-light-action" type="button" onClick={() => setIsEditing(true)}>
               <Pencil size={16} aria-hidden />
-              編輯
+              Edit
             </button>
           )}
+          <button className="danger-action compact-action" type="button" onClick={() => setIsResetConfirmOpen(true)}>
+            <Trash2 size={16} aria-hidden />
+            Reset data
+          </button>
         </div>
       </section>
 
       <section className="profile-progression">
         <div>
-          <p className="section-label">角色進度</p>
-          <h2>等級 {level}</h2>
+          <p className="section-label">Player progress</p>
+          <h2>Level {level}</h2>
         </div>
         <div className="profile-level-meter">
           <div className="meter compact">
@@ -1384,21 +1690,21 @@ function ProfileView({
         </div>
       </section>
 
-      <section className="profile-stat-lanes" aria-label="個人統計">
+      <section className="profile-stat-lanes" aria-label="Profile stats">
         <div>
-          <span>金幣</span>
+          <span>Coins</span>
           <strong>{state.user.coins}</strong>
         </div>
         <div>
-          <span>連續天數</span>
+          <span>Gym streak</span>
           <strong>{state.user.currentStreak}</strong>
         </div>
         <div>
-          <span>完成訓練</span>
+          <span>Workouts</span>
           <strong>{state.workouts.length}</strong>
         </div>
         <div>
-          <span>收藏獎勵</span>
+          <span>Rewards</span>
           <strong>{ownedRewardIds.size}</strong>
         </div>
       </section>
@@ -1406,13 +1712,13 @@ function ProfileView({
       <section className="profile-inventory">
         <div className="section-heading">
           <div>
-            <p className="section-label">展示櫃</p>
-            <h2>已擁有獎勵</h2>
+            <p className="section-label">Showcase</p>
+            <h2>Owned rewards</h2>
           </div>
         </div>
         <div className="inventory-list">
           {ownedRewards.length === 0 ? (
-            <p className="empty-copy">還沒有兌換獎勵。先完成訓練累積金幣。</p>
+            <p className="empty-copy">No rewards redeemed yet. Complete workouts to earn coins.</p>
           ) : (
             ownedRewards.map((reward) => (
               <div className="inventory-row" key={reward.id}>
@@ -1428,6 +1734,32 @@ function ProfileView({
           )}
         </div>
       </section>
+      {isResetConfirmOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-panel danger-modal" role="dialog" aria-modal="true" aria-labelledby="reset-data-title">
+            <div className="modal-head">
+              <div>
+                <p className="section-label">Testing reset</p>
+                <h2 id="reset-data-title">Reset all app data?</h2>
+              </div>
+              <button className="icon-button" type="button" aria-label="Close" onClick={() => setIsResetConfirmOpen(false)}>
+                <X size={16} aria-hidden />
+              </button>
+            </div>
+            <p className="danger-copy">
+              This clears workouts, check-ins, rewards, quests, coins, XP, and streaks for this account. Your profile name stays.
+            </p>
+            <div className="modal-actions">
+              <button className="ghost-light-action" type="button" onClick={() => setIsResetConfirmOpen(false)}>
+                Cancel
+              </button>
+              <button className="danger-action" type="button" onClick={confirmReset} disabled={resetPending}>
+                Reset all data
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -1511,6 +1843,99 @@ function applyAutoQuestRewards(state: GymitionState): GymitionState {
   return nextState;
 }
 
+function applyCompletedWorkoutState(
+  current: GymitionState,
+  input: {
+    id: string;
+    mode: "detailed" | "simple";
+    entries: WorkoutEntry[];
+    durationSeconds?: number;
+    notes?: string;
+    completedAt: string;
+    hasCardio: boolean;
+  },
+): GymitionState {
+  const exerciseCoins = input.entries.reduce((total, entry) => total + entry.coinsEarned, 0);
+  const exerciseXp = input.entries.reduce((total, entry) => total + entry.xpEarned, 0);
+  const workoutCoins = exerciseCoins + REWARD_RULES.workoutCompleted.coins;
+  const workoutXp = exerciseXp + REWARD_RULES.workoutCompleted.xp;
+  const workout: WorkoutSession = {
+    id: input.id,
+    status: "completed",
+    mode: input.mode,
+    startedAt: input.completedAt,
+    completedAt: input.completedAt,
+    durationSeconds: input.durationSeconds,
+    notes: input.notes,
+    entries: input.entries,
+    totalCoinsEarned: workoutCoins,
+    totalXpEarned: workoutXp,
+  };
+  const entryCoinLedger = input.entries.map((entry) =>
+    createLedgerEntry(entry.coinsEarned, "exercise_logged", "workout_entry", entry.id),
+  );
+  const entryXpLedger = input.entries.map((entry) =>
+    createLedgerEntry(entry.xpEarned, "exercise_logged", "workout_entry", entry.id),
+  );
+
+  const rewardedWorkoutState: GymitionState = {
+    ...current,
+    user: {
+      ...current.user,
+      coins: current.user.coins + workoutCoins,
+      xp: current.user.xp + workoutXp,
+    },
+    workouts: [...current.workouts, workout],
+    weeklyGoalProgress: {
+      ...current.weeklyGoalProgress,
+      workoutsCompleted: current.weeklyGoalProgress.workoutsCompleted + 1,
+      cardioWorkoutsCompleted: current.weeklyGoalProgress.cardioWorkoutsCompleted + (input.hasCardio ? 1 : 0),
+    },
+    coinLedger: [
+      ...current.coinLedger,
+      ...entryCoinLedger,
+      createLedgerEntry(REWARD_RULES.workoutCompleted.coins, "workout_completed", "workout", input.id),
+    ],
+    xpLedger: [
+      ...current.xpLedger,
+      ...entryXpLedger,
+      createLedgerEntry(REWARD_RULES.workoutCompleted.xp, "workout_completed", "workout", input.id),
+    ],
+  };
+
+  return applyAutoQuestRewards(rewardedWorkoutState);
+}
+
+function resetAppDataState(current: GymitionState): GymitionState {
+  return {
+    ...current,
+    user: {
+      ...current.user,
+      coins: 0,
+      xp: 0,
+      currentStreak: 0,
+      lastLoginRewardDate: null,
+    },
+    coinLedger: [],
+    xpLedger: [],
+    workouts: [],
+    userRewards: [],
+    questRewards: {},
+    dailyCheckins: [],
+    lifeHabitCheckins: [],
+    lifeSummary: {
+      streak: 0,
+      todayCompleted: false,
+      todayCompletedCount: 0,
+    },
+    weeklyGoal: null,
+    weeklyGoalProgress: {
+      workoutsCompleted: 0,
+      cardioWorkoutsCompleted: 0,
+    },
+  };
+}
+
 function usesSets(exercise: Exercise) {
   return exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only";
 }
@@ -1519,8 +1944,9 @@ function usesReps(exercise: Exercise) {
   return exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only";
 }
 
-function getDailyQuoteIndex(dateKey: string) {
-  return [...dateKey].reduce((total, character) => total + character.charCodeAt(0), 0) % motivationalQuotes.length;
+function getQuoteIndex(date = new Date()) {
+  const sampleKey = `${localDateKey(date)}-${date.getHours()}`;
+  return [...sampleKey].reduce((total, character) => total + character.charCodeAt(0), 0) % motivationalQuotes.length;
 }
 
 function clampInteger(value: number, min: number, max: number) {
@@ -1533,14 +1959,14 @@ function clampInteger(value: number, min: number, max: number) {
 
 function categoryLabel(category: Exercise["category"]) {
   const labels: Record<Exercise["category"], string> = {
-    chest: "胸部",
-    back: "背部",
-    legs: "腿部",
-    shoulders: "肩膀",
-    arms: "手臂",
-    core: "核心",
-    cardio: "有氧",
-    mobility: "活動度",
+    chest: "Chest",
+    back: "Back",
+    legs: "Legs",
+    shoulders: "Shoulders",
+    arms: "Arms",
+    core: "Core",
+    cardio: "Cardio",
+    mobility: "Mobility",
   };
 
   return labels[category];
@@ -1548,7 +1974,7 @@ function categoryLabel(category: Exercise["category"]) {
 
 function formatQuestProgress(quest: Quest, value: number) {
   if (quest.targetType === "duration_seconds") {
-    return `${Math.floor(value / 60)}/${Math.floor(quest.targetValue / 60)} 分鐘`;
+    return `${Math.floor(value / 60)}/${Math.floor(quest.targetValue / 60)} min`;
   }
 
   return `${value}/${quest.targetValue}`;
@@ -1577,42 +2003,65 @@ function buildCalendarDays(monthDate: Date) {
 
 function formatLifeCalendarLabel(habits?: Set<LifeHabitType>) {
   if (isLifeDayComplete(habits)) {
-    return "洗臉與刷牙完成";
+    return "Face washed and teeth brushed";
   }
 
   if (habits?.has("face_wash")) {
-    return "洗臉完成";
+    return "Face washed";
   }
 
   if (habits?.has("tooth_brush")) {
-    return "刷牙完成";
+    return "Teeth brushed";
   }
 
-  return "尚未簽到";
+  return "No check-in yet";
+}
+
+function formatDuration(seconds: number) {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+}
+
+function formatWorkoutSummary(workout: WorkoutSession, exercises: Exercise[]) {
+  if (workout.mode === "simple") {
+    return `Simple time log · ${formatDuration(workout.durationSeconds ?? 0)}`;
+  }
+
+  const exerciseNames = workout.entries
+    .map((entry) => exercises.find((exercise) => exercise.id === entry.exerciseId)?.name)
+    .filter(Boolean);
+
+  return exerciseNames.length ? exerciseNames.join(", ") : "Detailed workout";
 }
 
 function formatEntry(entry: WorkoutEntry) {
   if (entry.durationSeconds) {
-    return `${Math.round(entry.durationSeconds / 60)} 分鐘`;
+    return `${Math.round(entry.durationSeconds / 60)} min`;
   }
   if (entry.sets && entry.reps && entry.weight !== undefined) {
-    return `${entry.sets} 組 x ${entry.reps} 下，${entry.weight} kg`;
+    return `${entry.sets} sets x ${entry.reps} reps, ${entry.weight} kg`;
   }
   if (entry.sets && entry.reps) {
-    return `${entry.sets} 組 x ${entry.reps} 下`;
+    return `${entry.sets} sets x ${entry.reps} reps`;
   }
-  return "已完成";
+  return "Completed";
 }
 
 function ledgerReasonLabel(reason: LedgerReason) {
   const labels: Record<LedgerReason, string> = {
-    daily_login: "每日登入",
-    workout_completed: "完成訓練",
-    exercise_logged: "紀錄動作",
-    quest_completed: "完成任務",
-    streak_bonus: "連續天數加成",
-    reward_purchase: "兌換獎勵",
-    manual_adjustment: "手動調整",
+    daily_login: "Daily login",
+    workout_completed: "Workout complete",
+    exercise_logged: "Exercise logged",
+    quest_completed: "Quest complete",
+    streak_bonus: "Streak bonus",
+    reward_purchase: "Reward redeemed",
+    manual_adjustment: "Manual adjustment",
   };
 
   return labels[reason];
@@ -1620,11 +2069,11 @@ function ledgerReasonLabel(reason: LedgerReason) {
 
 function rewardTypeLabel(type: Reward["type"]) {
   const labels: Record<Reward["type"], string> = {
-    title: "稱號",
-    badge: "勛章",
-    theme: "主題",
-    avatar_item: "造型",
-    custom: "自訂",
+    title: "Title",
+    badge: "Badge",
+    theme: "Theme",
+    avatar_item: "Avatar item",
+    custom: "Custom",
   };
 
   return labels[type];

@@ -12,7 +12,7 @@ export function localWeekStartKey(date = new Date()) {
 }
 
 export function formatShortDate(dateIso: string) {
-  return new Intl.DateTimeFormat("zh-TW", {
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",

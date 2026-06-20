@@ -19,6 +19,8 @@ import { localDateKey } from "@/lib/dates";
 import { createId } from "@/lib/ids";
 import { completeWorkoutSchema, type CompleteWorkoutInput } from "./workout-validation";
 
+type DetailedWorkoutEntryInput = Extract<CompleteWorkoutInput, { mode: "detailed" }>["entries"][number];
+
 function dayRange(dateKey: string) {
   const start = new Date(`${dateKey}T00:00:00.000`);
   const end = new Date(start);
@@ -37,31 +39,40 @@ export async function completeWorkoutAction(input: unknown) {
   await db.transaction(async (tx) => {
     const activeExercises = await tx.select().from(exercises).where(eq(exercises.isActive, true));
     const exerciseById = new Map(activeExercises.map((exercise) => [exercise.id, exercise]));
-    const sanitizedEntries: CompleteWorkoutInput["entries"] = parsed.entries.map((entry) => {
-      const exercise = exerciseById.get(entry.exerciseId);
+    const sanitizedEntries: DetailedWorkoutEntryInput[] =
+      parsed.mode === "detailed"
+        ? parsed.entries.map((entry) => {
+            const exercise = exerciseById.get(entry.exerciseId);
 
-      if (!exercise) {
-        throw new Error("Invalid exercise.");
-      }
+            if (!exercise) {
+              throw new Error("Invalid exercise.");
+            }
 
-      const needsReps = exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only";
-      if (needsReps && (!entry.sets || !entry.reps)) {
-        throw new Error("Sets and reps are required.");
-      }
+            const needsReps = exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only";
+            if (needsReps && (!entry.sets || !entry.reps)) {
+              throw new Error("Sets and reps are required.");
+            }
 
-      if (exercise.measurementType === "duration" && !entry.durationSeconds) {
-        throw new Error("Duration is required.");
-      }
+            if (exercise.measurementType === "duration" && !entry.durationSeconds) {
+              throw new Error("Duration is required.");
+            }
 
-      return {
-        ...entry,
-        sets: exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only" ? entry.sets : undefined,
-        reps: exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only" ? entry.reps : undefined,
-        weight: exercise.measurementType === "reps_weight" ? entry.weight : undefined,
-        durationSeconds: exercise.measurementType === "duration" ? entry.durationSeconds : undefined,
-        distanceMeters: exercise.measurementType === "distance" ? entry.distanceMeters : undefined,
-      };
-    });
+            return {
+              ...entry,
+              sets:
+                exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only"
+                  ? entry.sets
+                  : undefined,
+              reps:
+                exercise.measurementType === "reps_weight" || exercise.measurementType === "reps_only"
+                  ? entry.reps
+                  : undefined,
+              weight: exercise.measurementType === "reps_weight" ? entry.weight : undefined,
+              durationSeconds: exercise.measurementType === "duration" ? entry.durationSeconds : undefined,
+              distanceMeters: exercise.measurementType === "distance" ? entry.distanceMeters : undefined,
+            };
+          })
+        : [];
 
     const workoutId = createId("workout");
     const exerciseCoins = sanitizedEntries.length * REWARD_RULES.exerciseLogged.coins;
@@ -73,8 +84,11 @@ export async function completeWorkoutAction(input: unknown) {
       id: workoutId,
       userId: appUser.id,
       status: "completed",
+      mode: parsed.mode,
       startedAt: now,
       completedAt: now,
+      durationSeconds: parsed.mode === "simple" ? parsed.durationSeconds : null,
+      notes: parsed.mode === "simple" ? parsed.notes?.trim() || null : null,
       totalCoinsEarned: totalCoins,
       totalXpEarned: totalXp,
     });
@@ -93,7 +107,9 @@ export async function completeWorkoutAction(input: unknown) {
       xpEarned: REWARD_RULES.exerciseLogged.xp,
     }));
 
-    await tx.insert(workoutEntries).values(entryRows);
+    if (entryRows.length) {
+      await tx.insert(workoutEntries).values(entryRows);
+    }
 
     await tx.insert(coinLedgerEntries).values([
       ...entryRows.map((entry) => ({

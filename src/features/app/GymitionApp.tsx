@@ -2,7 +2,7 @@ import { loadGymitionAppState } from "@/features/app/app-state";
 import { claimDailyRewardAction } from "@/features/economy/daily-reward-actions";
 import { setWeeklyGoalAction } from "@/features/goals/goal-actions";
 import { checkinLifeHabitAction } from "@/features/life/life-actions";
-import { updateProfileAction } from "@/features/profile/profile-actions";
+import { resetProfileDataAction, updateProfileAction } from "@/features/profile/profile-actions";
 import { GymitionPrototype } from "@/features/prototype/GymitionPrototype";
 import { purchaseRewardAction } from "@/features/rewards/reward-actions";
 import { completeWorkoutAction } from "@/features/workouts/workout-actions";
@@ -24,6 +24,7 @@ export async function GymitionApp({ view }: { view: AppView }) {
         completeWorkout: completeWorkoutAction,
         purchaseReward: purchaseRewardAction,
         updateProfile: updateProfileAction,
+        resetProfileData: resetProfileDataAction,
         setWeeklyGoal: setWeeklyGoalAction,
         checkinLifeHabit: checkinLifeHabitAction,
       }}

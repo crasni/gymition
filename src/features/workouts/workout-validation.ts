@@ -10,8 +10,16 @@ export const workoutEntryInputSchema = z.object({
   notes: z.string().trim().max(500).optional(),
 });
 
-export const completeWorkoutSchema = z.object({
-  entries: z.array(workoutEntryInputSchema).min(1).max(80),
-});
+export const completeWorkoutSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("detailed"),
+    entries: z.array(workoutEntryInputSchema).min(1).max(80),
+  }),
+  z.object({
+    mode: z.literal("simple"),
+    durationSeconds: z.number().int().min(60).max(24 * 60 * 60),
+    notes: z.string().trim().max(500).optional(),
+  }),
+]);
 
 export type CompleteWorkoutInput = z.infer<typeof completeWorkoutSchema>;
