@@ -129,6 +129,29 @@ export type DailyCheckin = {
   createdAt: string;
 };
 
+export type LifeHabitType = "face_wash" | "tooth_brush";
+
+export type LifeHabitCheckin = {
+  id: string;
+  checkinDate: string;
+  habitType: LifeHabitType;
+  createdAt: string;
+};
+
+export type LifeSummary = {
+  streak: number;
+  todayCompleted: boolean;
+  todayCompletedCount: number;
+};
+
+export type LifeCheckinSummary = {
+  habitType: LifeHabitType;
+  alreadyCompleted: boolean;
+  todayCompleted: boolean;
+  todayCompletedCount: number;
+  streak: number;
+};
+
 export type WeeklyGoal = {
   id: string;
   weekStart: string;
@@ -149,6 +172,8 @@ export type GymitionState = {
   userRewards: UserReward[];
   questRewards: Record<string, string>;
   dailyCheckins: DailyCheckin[];
+  lifeHabitCheckins: LifeHabitCheckin[];
+  lifeSummary: LifeSummary;
   weeklyGoal: WeeklyGoal | null;
   weeklyGoalProgress: WeeklyGoalProgress;
 };

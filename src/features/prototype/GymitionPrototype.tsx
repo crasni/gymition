@@ -2,17 +2,23 @@
 
 import {
   ArrowRight,
+  BadgeCheck,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Check,
   CheckCircle2,
   CircleDollarSign,
+  Droplets,
   Dumbbell,
   Flame,
   Gift,
+  HeartPulse,
   Pencil,
   Plus,
   Save,
   ShoppingBag,
+  SmilePlus,
   Sparkles,
   Trash2,
   X,
@@ -31,12 +37,16 @@ import type {
   GymitionState,
   LedgerEntry,
   LedgerReason,
+  LifeCheckinSummary,
+  LifeHabitCheckin,
+  LifeHabitType,
   Quest,
   Reward,
   WorkoutEntry,
   WorkoutSession,
 } from "@/features/economy/types";
 import { seedExercises } from "@/features/exercises/seed-exercises";
+import { calculateLifeStreak, getLifeHabitMap, isLifeDayComplete } from "@/features/life/life-streak";
 import { calculateQuestProgress, getDailyQuestKey } from "@/features/quests/quest-engine";
 import { dailyQuests } from "@/features/quests/quest-rules";
 import { seedRewards } from "@/features/rewards/reward-service";
@@ -44,7 +54,7 @@ import { nextLoginStreak } from "@/features/streaks/streak-service";
 import { formatShortDate, localDateKey } from "@/lib/dates";
 import { createId } from "@/lib/ids";
 
-type AppView = "dashboard" | "workout" | "history" | "rewards" | "profile";
+type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "profile";
 
 type ServerActions = {
   claimDailyReward?: () => Promise<DailyCheckinSummary>;
@@ -62,6 +72,7 @@ type ServerActions = {
   purchaseReward?: (input: { rewardId: string }) => Promise<void>;
   updateProfile?: (input: { username: string }) => Promise<void>;
   setWeeklyGoal?: (input: { workoutTarget: number; cardioTarget: number }) => Promise<void>;
+  checkinLifeHabit?: (input: { habitType: LifeHabitType }) => Promise<LifeCheckinSummary>;
 };
 
 type DailyCheckinSummary = {
@@ -114,6 +125,19 @@ const motivationalQuotes = [
   },
 ] as const;
 
+const lifeHabitMeta = {
+  face_wash: {
+    label: "洗臉",
+    note: "清爽開始，讓今天留下一個乾淨的刻度。",
+    Icon: Droplets,
+  },
+  tooth_brush: {
+    label: "刷牙",
+    note: "把小事做到，就是節奏。",
+    Icon: SmilePlus,
+  },
+} satisfies Record<LifeHabitType, { label: string; note: string; Icon: typeof Droplets }>;
+
 export function GymitionPrototype({
   initialView,
   initialState,
@@ -140,6 +164,7 @@ export function GymitionPrototype({
   const [draftEntries, setDraftEntries] = useState<WorkoutEntry[]>([]);
   const [lastSummary, setLastSummary] = useState<string | null>(null);
   const [dailyCheckinSummary, setDailyCheckinSummary] = useState<DailyCheckinSummary | null>(null);
+  const [lifeCheckinSummary, setLifeCheckinSummary] = useState<LifeCheckinSummary | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -150,6 +175,15 @@ export function GymitionPrototype({
     const timeout = window.setTimeout(() => setDailyCheckinSummary(null), 2800);
     return () => window.clearTimeout(timeout);
   }, [dailyCheckinSummary]);
+
+  useEffect(() => {
+    if (!lifeCheckinSummary) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setLifeCheckinSummary(null), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [lifeCheckinSummary]);
 
   useEffect(() => {
     if (!actionError) {
@@ -411,6 +445,59 @@ export function GymitionPrototype({
     }));
   }
 
+  function checkinLifeHabit(habitType: LifeHabitType) {
+    if (actions.checkinLifeHabit) {
+      runServerAction(async () => {
+        const summary = await actions.checkinLifeHabit?.({ habitType });
+        if (summary) {
+          setLifeCheckinSummary(summary);
+        }
+      });
+      return;
+    }
+
+    const today = localDateKey();
+    const alreadyCompleted = state.lifeHabitCheckins.some(
+      (checkin) => checkin.checkinDate === today && checkin.habitType === habitType,
+    );
+
+    if (alreadyCompleted) {
+      return;
+    }
+
+    setLocalState((current) => {
+      const nextCheckins: LifeHabitCheckin[] = [
+        ...current.lifeHabitCheckins,
+        {
+          id: createId("life_checkin"),
+          checkinDate: today,
+          habitType,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      const todayHabits = getLifeHabitMap(nextCheckins).get(today);
+      const summary: LifeCheckinSummary = {
+        habitType,
+        alreadyCompleted: false,
+        todayCompleted: isLifeDayComplete(todayHabits),
+        todayCompletedCount: todayHabits?.size ?? 0,
+        streak: calculateLifeStreak(nextCheckins),
+      };
+
+      setLifeCheckinSummary(summary);
+
+      return {
+        ...current,
+        lifeHabitCheckins: nextCheckins,
+        lifeSummary: {
+          streak: summary.streak,
+          todayCompleted: summary.todayCompleted,
+          todayCompletedCount: summary.todayCompletedCount,
+        },
+      };
+    });
+  }
+
   return (
     <AppShell
       activeView={initialView}
@@ -461,6 +548,15 @@ export function GymitionPrototype({
         />
       )}
 
+      {initialView === "life" && (
+        <LifeView
+          checkins={state.lifeHabitCheckins}
+          summary={state.lifeSummary}
+          pending={isPending}
+          onCheckin={checkinLifeHabit}
+        />
+      )}
+
       {initialView === "profile" && (
         <ProfileView
           state={state}
@@ -480,6 +576,29 @@ export function GymitionPrototype({
             <strong>簽到完成</strong>
             <span>
               +{dailyCheckinSummary.coins} 金幣 · +{dailyCheckinSummary.xp} XP · 連續 {dailyCheckinSummary.streak} 天
+            </span>
+          </div>
+        </div>
+      )}
+      {lifeCheckinSummary && (
+        <div
+          className={lifeCheckinSummary.todayCompleted ? "checkin-toast life-complete" : "checkin-toast"}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="checkin-toast-icon">
+            {lifeCheckinSummary.todayCompleted ? (
+              <HeartPulse size={28} aria-hidden />
+            ) : (
+              <BadgeCheck size={28} aria-hidden />
+            )}
+          </div>
+          <div>
+            <strong>{lifeCheckinSummary.todayCompleted ? "Life 簽到完成" : `${lifeHabitMeta[lifeCheckinSummary.habitType].label}完成`}</strong>
+            <span>
+              {lifeCheckinSummary.todayCompleted
+                ? `兩項都完成 · Life 連續 ${lifeCheckinSummary.streak} 天`
+                : `今日進度 ${lifeCheckinSummary.todayCompletedCount}/2`}
             </span>
           </div>
         </div>
@@ -620,6 +739,135 @@ function DashboardView({
           </section>
         </aside>
       </div>
+    </div>
+  );
+}
+
+function LifeView({
+  checkins,
+  summary,
+  pending,
+  onCheckin,
+}: {
+  checkins: LifeHabitCheckin[];
+  summary: GymitionState["lifeSummary"];
+  pending: boolean;
+  onCheckin: (habitType: LifeHabitType) => void;
+}) {
+  const today = localDateKey();
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date(`${today}T00:00:00`));
+  const habitsByDate = useMemo(() => getLifeHabitMap(checkins), [checkins]);
+  const todayHabits = habitsByDate.get(today);
+  const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
+  const monthTitle = new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "long",
+  }).format(visibleMonth);
+
+  function shiftMonth(offset: number) {
+    setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+  }
+
+  return (
+    <div className="life-layout">
+      <section className="life-hero">
+        <div>
+          <p className="section-label">Life streak</p>
+          <h2>{summary.todayCompleted ? "今天的生活簽到完成" : "把今天的兩件小事打勾"}</h2>
+          <p>洗臉和刷牙都完成，才會延續 Life streak。</p>
+        </div>
+        <div className="life-scoreboard" aria-label="Life streak 狀態">
+          <div>
+            <Flame size={20} aria-hidden />
+            <span>連續</span>
+            <strong>{summary.streak} 天</strong>
+          </div>
+          <div>
+            <CheckCircle2 size={20} aria-hidden />
+            <span>今日</span>
+            <strong>{summary.todayCompletedCount}/2</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="life-checkin-grid" aria-label="今日生活簽到">
+        {(["face_wash", "tooth_brush"] as const).map((habitType) => {
+          const meta = lifeHabitMeta[habitType];
+          const completed = todayHabits?.has(habitType) ?? false;
+          const Icon = meta.Icon;
+
+          return (
+            <button
+              className={completed ? "life-checkin-card done" : "life-checkin-card"}
+              disabled={completed || pending}
+              key={habitType}
+              onClick={() => onCheckin(habitType)}
+              type="button"
+            >
+              <span className="life-checkin-icon">
+                {completed ? <Check size={22} aria-hidden /> : <Icon size={24} aria-hidden />}
+              </span>
+              <span>
+                <strong>{meta.label}</strong>
+                <small>{completed ? "今天已簽到" : meta.note}</small>
+              </span>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="life-calendar-panel">
+        <div className="life-calendar-head">
+          <div>
+            <p className="section-label">Calendar</p>
+            <h2>{monthTitle}</h2>
+          </div>
+          <div className="calendar-controls">
+            <button className="icon-button" type="button" aria-label="上一個月" onClick={() => shiftMonth(-1)}>
+              <ChevronLeft size={16} aria-hidden />
+            </button>
+            <button className="icon-button" type="button" aria-label="下一個月" onClick={() => shiftMonth(1)}>
+              <ChevronRight size={16} aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        <div className="life-calendar-grid" aria-label="Life habit calendar">
+          {["一", "二", "三", "四", "五", "六", "日"].map((weekday) => (
+            <span className="calendar-weekday" key={weekday}>
+              {weekday}
+            </span>
+          ))}
+          {calendarDays.map((day, index) => {
+            if (!day) {
+              return <span className="life-calendar-day empty" key={`empty-${index}`} aria-hidden />;
+            }
+
+            const habits = habitsByDate.get(day.dateKey);
+            const complete = isLifeDayComplete(habits);
+            const isToday = day.dateKey === today;
+
+            return (
+              <div
+                className={[
+                  "life-calendar-day",
+                  complete ? "complete" : "",
+                  isToday ? "today" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                key={day.dateKey}
+              >
+                <span className="calendar-date-number">{day.dayNumber}</span>
+                <span className="calendar-habit-dots" aria-label={formatLifeCalendarLabel(habits)}>
+                  <span className={habits?.has("face_wash") ? "habit-dot face active" : "habit-dot face"} />
+                  <span className={habits?.has("tooth_brush") ? "habit-dot brush active" : "habit-dot brush"} />
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
@@ -1212,6 +1460,12 @@ function createInitialState(): GymitionState {
     userRewards: [],
     questRewards: {},
     dailyCheckins: [],
+    lifeHabitCheckins: [],
+    lifeSummary: {
+      streak: 0,
+      todayCompleted: false,
+      todayCompletedCount: 0,
+    },
     weeklyGoal: null,
     weeklyGoalProgress: {
       workoutsCompleted: 0,
@@ -1298,6 +1552,43 @@ function formatQuestProgress(quest: Quest, value: number) {
   }
 
   return `${value}/${quest.targetValue}`;
+}
+
+function buildCalendarDays(monthDate: Date) {
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+  const leadingEmptyDays = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+  const days: Array<{ dateKey: string; dayNumber: number } | null> = [];
+
+  for (let index = 0; index < leadingEmptyDays; index += 1) {
+    days.push(null);
+  }
+
+  for (let dayNumber = 1; dayNumber <= lastDay.getDate(); dayNumber += 1) {
+    const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), dayNumber);
+    days.push({
+      dateKey: localDateKey(date),
+      dayNumber,
+    });
+  }
+
+  return days;
+}
+
+function formatLifeCalendarLabel(habits?: Set<LifeHabitType>) {
+  if (isLifeDayComplete(habits)) {
+    return "洗臉與刷牙完成";
+  }
+
+  if (habits?.has("face_wash")) {
+    return "洗臉完成";
+  }
+
+  if (habits?.has("tooth_brush")) {
+    return "刷牙完成";
+  }
+
+  return "尚未簽到";
 }
 
 function formatEntry(entry: WorkoutEntry) {

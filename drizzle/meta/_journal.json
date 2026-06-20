@@ -15,6 +15,13 @@
       "when": 1781880710392,
       "tag": "0001_daily_checkins_weekly_goals",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781937011460,
+      "tag": "0002_reflective_hawkeye",
+      "breakpoints": true
     }
   ]
 }

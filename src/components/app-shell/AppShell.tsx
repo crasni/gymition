@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   Dumbbell,
   Gift,
+  HeartPulse,
   History,
   LayoutDashboard,
   Medal,
@@ -14,13 +15,14 @@ import {
 import type { ReactNode } from "react";
 import { levelFromXp, xpForNextLevel } from "@/features/economy/xp-rules";
 
-type AppView = "dashboard" | "workout" | "history" | "rewards" | "profile";
+type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "profile";
 
 const navItems = [
   { view: "dashboard", href: "/dashboard", label: "總覽", icon: LayoutDashboard },
   { view: "workout", href: "/workout", label: "訓練", icon: Dumbbell },
   { view: "history", href: "/history", label: "紀錄", icon: History },
   { view: "rewards", href: "/rewards", label: "獎勵", icon: Gift },
+  { view: "life", href: "/life", label: "生活", icon: HeartPulse },
   { view: "profile", href: "/profile", label: "個人", icon: User },
 ] satisfies Array<{
   view: AppView;
@@ -124,5 +126,6 @@ function activeViewLabel(view: AppView) {
   if (view === "workout") return "訓練紀錄";
   if (view === "history") return "歷史紀錄";
   if (view === "rewards") return "獎勵商店";
+  if (view === "life") return "Life 追蹤";
   return "個人檔案";
 }

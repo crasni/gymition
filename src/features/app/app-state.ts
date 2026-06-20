@@ -6,6 +6,7 @@ import {
   coinLedgerEntries,
   dailyCheckins,
   exercises,
+  lifeHabitCheckins,
   quests,
   rewards,
   userQuests,
@@ -19,14 +20,16 @@ import type {
   Exercise,
   GymitionState,
   LedgerEntry,
+  LifeHabitCheckin,
   Quest,
   Reward,
   UserReward,
   WorkoutEntry,
   WorkoutSession,
 } from "@/features/economy/types";
+import { calculateLifeStreak, getLifeHabitMap, isLifeDayComplete } from "@/features/life/life-streak";
 import { requireCurrentAppUser } from "@/features/users/current-user";
-import { localWeekStartKey } from "@/lib/dates";
+import { localDateKey, localWeekStartKey } from "@/lib/dates";
 
 function toIso(value: Date | string | null) {
   if (!value) {
@@ -54,6 +57,7 @@ export async function loadGymitionAppState() {
     xpLedgerRows,
     userQuestRows,
     dailyCheckinRows,
+    lifeHabitCheckinRows,
     currentWeeklyGoalRows,
     currentWeekWorkoutRows,
   ] = await Promise.all([
@@ -70,6 +74,11 @@ export async function loadGymitionAppState() {
       .from(dailyCheckins)
       .where(eq(dailyCheckins.userId, appUser.id))
       .orderBy(desc(dailyCheckins.checkinDate)),
+    db
+      .select()
+      .from(lifeHabitCheckins)
+      .where(eq(lifeHabitCheckins.userId, appUser.id))
+      .orderBy(desc(lifeHabitCheckins.checkinDate)),
     db
       .select()
       .from(userWeeklyGoals)
@@ -120,6 +129,15 @@ export async function loadGymitionAppState() {
       .map((entry) => entry.sessionId),
   );
   const [currentWeeklyGoal] = currentWeeklyGoalRows;
+  const lifeCheckins = lifeHabitCheckinRows.map(
+    (checkin): LifeHabitCheckin => ({
+      id: checkin.id,
+      checkinDate: checkin.checkinDate,
+      habitType: checkin.habitType,
+      createdAt: checkin.createdAt.toISOString(),
+    }),
+  );
+  const todayLifeHabits = getLifeHabitMap(lifeCheckins).get(localDateKey());
 
   const state: GymitionState = {
     user: {
@@ -184,6 +202,12 @@ export async function loadGymitionAppState() {
       streakBonusCoins: checkin.streakBonusCoins,
       createdAt: checkin.createdAt.toISOString(),
     })),
+    lifeHabitCheckins: lifeCheckins,
+    lifeSummary: {
+      streak: calculateLifeStreak(lifeCheckins),
+      todayCompleted: isLifeDayComplete(todayLifeHabits),
+      todayCompletedCount: todayLifeHabits?.size ?? 0,
+    },
     weeklyGoal: currentWeeklyGoal
       ? {
           id: currentWeeklyGoal.id,

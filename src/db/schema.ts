@@ -63,6 +63,8 @@ export const questTargetTypeEnum = pgEnum("quest_target_type", [
 
 export const rewardTypeEnum = pgEnum("reward_type", ["title", "badge", "theme", "avatar_item", "custom"]);
 
+export const lifeHabitTypeEnum = pgEnum("life_habit_type", ["face_wash", "tooth_brush"]);
+
 export const users = pgTable(
   "users",
   {
@@ -96,6 +98,27 @@ export const dailyCheckins = pgTable(
   (table) => [
     uniqueIndex("daily_checkins_user_date_unique").on(table.userId, table.checkinDate),
     index("daily_checkins_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
+
+export const lifeHabitCheckins = pgTable(
+  "life_habit_checkins",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    checkinDate: date("checkin_date").notNull(),
+    habitType: lifeHabitTypeEnum("habit_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("life_habit_checkins_user_date_type_unique").on(
+      table.userId,
+      table.checkinDate,
+      table.habitType,
+    ),
+    index("life_habit_checkins_user_date_idx").on(table.userId, table.checkinDate),
   ],
 );
 
