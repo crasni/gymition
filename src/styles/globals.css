@@ -93,6 +93,23 @@ a {
   width: 260px;
 }
 
+.sidebar-mobile-head,
+.sidebar-content {
+  display: contents;
+}
+
+.mobile-menu-toggle {
+  align-items: center;
+  background: #4a362a;
+  border: 1px solid #6a5140;
+  border-radius: 8px;
+  color: #fff7ec;
+  display: none;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
 .main-shell {
   grid-column: 2;
 }
@@ -263,6 +280,122 @@ h2 {
 .topbar-stats span,
 .topbar-stats strong {
   font-size: 14px;
+}
+
+.page-swap-skeleton {
+  display: grid;
+  gap: 16px;
+  min-height: calc(100vh - 118px);
+}
+
+.skeleton-hero,
+.skeleton-panel {
+  background: #f2f0ed;
+  border: 1px solid #e2ded8;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  overflow: hidden;
+  padding: 22px;
+  position: relative;
+}
+
+.skeleton-hero::after,
+.skeleton-panel::after,
+.skeleton-row::after {
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.62), transparent);
+  content: "";
+  inset: 0;
+  position: absolute;
+  transform: translateX(-100%);
+}
+
+.skeleton-hero {
+  min-height: 170px;
+}
+
+.skeleton-grid {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.skeleton-panel.large {
+  min-height: 360px;
+}
+
+.skeleton-panel.side {
+  min-height: 300px;
+}
+
+.skeleton-line,
+.skeleton-pill,
+.skeleton-dot,
+.skeleton-block {
+  background: #d9d5ce;
+  border-radius: 8px;
+  display: block;
+}
+
+.skeleton-line {
+  height: 14px;
+  max-width: 100%;
+  width: 44%;
+}
+
+.skeleton-line.short {
+  height: 12px;
+  width: 120px;
+}
+
+.skeleton-line.title {
+  height: 32px;
+  width: min(460px, 72%);
+}
+
+.skeleton-line.wide {
+  width: min(620px, 88%);
+}
+
+.skeleton-line.mid {
+  width: min(360px, 58%);
+}
+
+.skeleton-row {
+  align-items: center;
+  background: #eae7e2;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 38px minmax(0, 1fr) 88px;
+  min-height: 74px;
+  overflow: hidden;
+  padding: 16px;
+  position: relative;
+}
+
+.skeleton-dot {
+  height: 38px;
+  width: 38px;
+}
+
+.skeleton-pill {
+  height: 20px;
+  justify-self: end;
+  width: 88px;
+}
+
+.skeleton-block {
+  height: 170px;
+  width: 100%;
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .home-layout {
@@ -1750,12 +1883,40 @@ select:focus {
   }
 
   .sidebar {
-    grid-template-columns: 1fr;
+    box-shadow: 0 12px 32px rgba(43, 32, 24, 0.14);
     height: auto;
     min-height: auto;
     overflow-y: visible;
-    position: static;
+    padding: 12px 18px;
+    position: sticky;
     width: auto;
+    z-index: 20;
+  }
+
+  .sidebar-mobile-head {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .mobile-menu-toggle {
+    display: inline-flex;
+  }
+
+  .sidebar-content {
+    background: #2c211b;
+    border-top: 1px solid #4a362a;
+    display: none;
+    gap: 12px;
+    left: 0;
+    padding: 14px 18px 18px;
+    position: absolute;
+    right: 0;
+    top: 100%;
+  }
+
+  .sidebar.menu-open .sidebar-content {
+    display: grid;
   }
 
   .sidebar-logout {
@@ -1767,8 +1928,9 @@ select:focus {
   }
 
   .primary-nav {
-    display: flex;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
   }
 
   .nav-link {
@@ -1780,6 +1942,7 @@ select:focus {
   }
 
   .hero-command,
+  .skeleton-grid,
   .workbench-grid,
   .history-layout,
   .two-column,
@@ -1811,7 +1974,8 @@ select:focus {
 
 @media (max-width: 680px) {
   .main-shell,
-  .sidebar {
+  .sidebar,
+  .sidebar-content {
     padding: 18px;
   }
 
@@ -1820,9 +1984,7 @@ select:focus {
   }
 
   .primary-nav {
-    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
   }
 
   .hero-command {
@@ -1831,6 +1993,19 @@ select:focus {
 
   .hero-copy h2 {
     font-size: 34px;
+  }
+
+  .skeleton-hero,
+  .skeleton-panel {
+    padding: 18px;
+  }
+
+  .skeleton-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .skeleton-pill {
+    justify-self: start;
   }
 
   .status-strip {

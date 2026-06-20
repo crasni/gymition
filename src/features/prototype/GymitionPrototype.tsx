@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell } from "@/components/app-shell/AppShell";
+import { AppShell, type AppView } from "@/components/app-shell/AppShell";
 import {
   calculateStreakBonus,
   createLedgerEntry,
@@ -54,8 +54,6 @@ import { seedRewards } from "@/features/rewards/reward-service";
 import { nextLoginStreak } from "@/features/streaks/streak-service";
 import { formatShortDate, localDateKey } from "@/lib/dates";
 import { createId } from "@/lib/ids";
-
-type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "profile";
 
 type ServerActions = {
   claimDailyReward?: () => Promise<DailyCheckinSummary>;
@@ -195,7 +193,12 @@ export function GymitionPrototype({
   actions?: ServerActions;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startActionTransition] = useTransition();
+  const [isRoutePending, startRouteTransition] = useTransition();
+  const [navigationState, setNavigationState] = useState({
+    displayView: initialView,
+    routeView: initialView,
+  });
   const [localState, setLocalState] = useState(createInitialState());
   const [optimisticState, setOptimisticState] = useState<GymitionState | null>(null);
   const lastServerStateRef = useRef(initialState);
@@ -213,6 +216,15 @@ export function GymitionPrototype({
   const [lifeCheckinSummary, setLifeCheckinSummary] = useState<LifeCheckinSummary | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingActions, setPendingActions] = useState<Set<string>>(() => new Set());
+  let currentNavigationState = navigationState;
+  if (currentNavigationState.routeView !== initialView) {
+    currentNavigationState = {
+      displayView: initialView,
+      routeView: initialView,
+    };
+    setNavigationState(currentNavigationState);
+  }
+  const displayView = currentNavigationState.displayView;
 
   useEffect(() => {
     if (!initialState || lastServerStateRef.current === initialState) {
@@ -276,7 +288,7 @@ export function GymitionPrototype({
     }
 
     markActionPending(key);
-    startTransition(async () => {
+    startActionTransition(async () => {
       try {
         setActionError(null);
         await action();
@@ -287,6 +299,20 @@ export function GymitionPrototype({
       } finally {
         clearActionPending(key);
       }
+    });
+  }
+
+  function navigateView(view: AppView, href: string) {
+    if (view === displayView && view === initialView) {
+      return;
+    }
+
+    setNavigationState({
+      displayView: view,
+      routeView: initialView,
+    });
+    startRouteTransition(() => {
+      router.push(href);
     });
   }
 
@@ -665,17 +691,24 @@ export function GymitionPrototype({
     }
   }
 
+  const isPageSwapPending = displayView !== initialView || isRoutePending;
+
   return (
     <AppShell
-      activeView={initialView}
+      activeView={displayView}
       coins={state.user.coins}
       xp={state.user.xp}
       streak={state.user.currentStreak}
       username={state.user.username}
       onReset={resetDemo}
+      onNavigate={navigateView}
       resetLabel={initialState ? "Refresh data" : "Reset demo data"}
     >
-      {initialView === "dashboard" && (
+      {isPageSwapPending ? (
+        <PageSwapSkeleton view={displayView} />
+      ) : null}
+
+      {!isPageSwapPending && displayView === "dashboard" && (
         <DashboardView
           state={state}
           level={level}
@@ -686,10 +719,11 @@ export function GymitionPrototype({
           quests={quests}
           onSetWeeklyGoal={setWeeklyGoal}
           goalPending={pendingActions.has("weekly-goal")}
+          onNavigate={navigateView}
         />
       )}
 
-      {initialView === "workout" && (
+      {!isPageSwapPending && displayView === "workout" && (
         <WorkoutView
           draftEntry={draftEntry}
           draftEntries={draftEntries}
@@ -710,9 +744,9 @@ export function GymitionPrototype({
         />
       )}
 
-      {initialView === "history" && <HistoryView workouts={state.workouts} exercises={exercises} />}
+      {!isPageSwapPending && displayView === "history" && <HistoryView workouts={state.workouts} exercises={exercises} />}
 
-      {initialView === "rewards" && (
+      {!isPageSwapPending && displayView === "rewards" && (
         <RewardsView
           rewards={rewards}
           coins={state.user.coins}
@@ -721,7 +755,7 @@ export function GymitionPrototype({
         />
       )}
 
-      {initialView === "life" && (
+      {!isPageSwapPending && displayView === "life" && (
         <LifeView
           checkins={state.lifeHabitCheckins}
           summary={state.lifeSummary}
@@ -730,7 +764,7 @@ export function GymitionPrototype({
         />
       )}
 
-      {initialView === "profile" && (
+      {!isPageSwapPending && displayView === "profile" && (
         <ProfileView
           state={state}
           level={level}
@@ -787,6 +821,36 @@ export function GymitionPrototype({
   );
 }
 
+function PageSwapSkeleton({ view }: { view: AppView }) {
+  const rowCount = view === "history" || view === "rewards" ? 5 : 3;
+
+  return (
+    <section className={`page-swap-skeleton ${view}`} aria-label="Loading page" aria-busy="true">
+      <div className="skeleton-hero">
+        <span className="skeleton-line short" />
+        <span className="skeleton-line title" />
+        <span className="skeleton-line wide" />
+      </div>
+      <div className="skeleton-grid">
+        <div className="skeleton-panel large">
+          {Array.from({ length: rowCount }).map((_, index) => (
+            <div className="skeleton-row" key={index}>
+              <span className="skeleton-dot" />
+              <span className="skeleton-line mid" />
+              <span className="skeleton-pill" />
+            </div>
+          ))}
+        </div>
+        <div className="skeleton-panel side">
+          <span className="skeleton-line short" />
+          <span className="skeleton-line title" />
+          <span className="skeleton-block" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function StreakCelebration({
   title,
   label,
@@ -833,6 +897,7 @@ function DashboardView({
   quests,
   onSetWeeklyGoal,
   goalPending,
+  onNavigate,
 }: {
   state: GymitionState;
   level: number;
@@ -843,6 +908,7 @@ function DashboardView({
   quests: Quest[];
   onSetWeeklyGoal: (input: { workoutTarget: number; cardioTarget: number }) => void;
   goalPending: boolean;
+  onNavigate: (view: AppView, href: string) => void;
 }) {
   const completedQuestCount = questProgress.filter((item) => item.completed).length;
   const totalQuestCount = quests.length;
@@ -856,7 +922,18 @@ function DashboardView({
           <p>{quote.note}</p>
         </div>
         <div className="hero-actions">
-          <a className="start-workout-action" href="/workout">
+          <a
+            className="start-workout-action"
+            href="/workout"
+            onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+              }
+
+              event.preventDefault();
+              onNavigate("workout", "/workout");
+            }}
+          >
             <Dumbbell size={20} aria-hidden />
             Start workout
             <ArrowRight size={18} aria-hidden />
