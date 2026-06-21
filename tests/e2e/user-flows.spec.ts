@@ -79,6 +79,7 @@ test("history, leaderboard, profile edit, and reset flows are reachable", async 
   await expect(page.getByRole("heading", { name: "Check-in streak" })).toBeVisible();
   await expect(page.locator(".leaderboard-row", { hasText: "E2E User" })).toHaveCount(2);
   await expect(page.locator(".leaderboard-row", { hasText: "Level 4" })).toBeVisible();
+  await expect(page.locator(".leaderboard-row", { hasText: "E2E User" }).first()).toHaveAttribute("href", "/profile/e2e_user");
 
   await page.goto("/e2e?view=profile&rich=1");
   await page.getByRole("button", { name: "Edit" }).click();

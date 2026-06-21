@@ -809,8 +809,15 @@ h2 {
 }
 
 .leaderboard-row {
+  color: inherit;
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
+  text-decoration: none;
+}
+
+.leaderboard-row:focus-visible {
+  outline: 3px solid rgba(200, 131, 43, 0.24);
+  outline-offset: 3px;
 }
 
 .leaderboard-row.current {
@@ -2469,6 +2476,26 @@ select:focus {
 .quest-row.done {
   background: #fff1db;
   border-color: #e5c387;
+}
+
+.public-profile-page {
+  margin: 0 auto;
+  max-width: 980px;
+  padding: 28px;
+}
+
+.public-profile {
+  display: grid;
+  gap: 18px;
+}
+
+.public-profile .profile-hero {
+  justify-content: flex-start;
+}
+
+.public-profile-badges {
+  background: var(--surface-side);
+  border-left: 3px solid rgba(156, 101, 39, 0.26);
 }
 
 .life-checkin-card.done,

@@ -26,6 +26,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, type AppView } from "@/components/app-shell/AppShell";
@@ -2128,14 +2129,15 @@ function LeaderboardList({
   return (
     <div className="leaderboard-list">
       {entries.map((entry, index) => (
-        <div
+        <Link
           className={entry.userId === currentUserId ? "leaderboard-row current" : "leaderboard-row"}
+          href={`/profile/${entry.userId}`}
           key={entry.userId}
         >
           <span className="leaderboard-rank">{index + 1}</span>
           <strong>{entry.username}</strong>
           <span>{valueLabel(entry.value)}</span>
-        </div>
+        </Link>
       ))}
     </div>
   );
