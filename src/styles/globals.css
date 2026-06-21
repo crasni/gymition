@@ -2484,6 +2484,42 @@ select:focus {
   padding: 28px;
 }
 
+.public-profile-back {
+  align-items: center;
+  background: #fffaf1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  display: inline-flex;
+  font-weight: 850;
+  gap: 8px;
+  margin-bottom: 16px;
+  min-height: 40px;
+  padding: 8px 12px;
+  text-decoration: none;
+  transition:
+    background-color var(--transition),
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.public-profile-back:hover {
+  background: #fff1db;
+  border-color: var(--border-strong);
+  box-shadow: 0 10px 24px rgba(82, 58, 32, 0.08);
+  transform: translateY(-1px);
+}
+
+.public-profile-back:focus-visible {
+  outline: 3px solid rgba(200, 131, 43, 0.24);
+  outline-offset: 3px;
+}
+
+.public-profile-back.loading-block {
+  width: 132px;
+}
+
 .public-profile {
   display: grid;
   gap: 18px;
