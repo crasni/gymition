@@ -12,7 +12,7 @@ export type CosmeticContext = {
   completedWorkouts: number;
   currentCoins: number;
   lifetimeCoins: number;
-  isAdmin: boolean;
+  canBypassLocks: boolean;
 };
 
 export function buildCosmeticContext(state: GymitionState): CosmeticContext {
@@ -23,7 +23,7 @@ export function buildCosmeticContext(state: GymitionState): CosmeticContext {
     completedWorkouts: state.workouts.filter((workout) => workout.status === "completed").length,
     currentCoins: state.user.coins,
     lifetimeCoins: calculateLifetimeCoins(state.coinLedger),
-    isAdmin: state.user.isAdmin,
+    canBypassLocks: state.user.role === "tester",
   };
 }
 
@@ -64,7 +64,7 @@ export function isEquippableCosmetic(reward: Reward) {
 }
 
 export function isAchievementUnlocked(reward: Reward, context: CosmeticContext) {
-  if (context.isAdmin) {
+  if (context.canBypassLocks) {
     return true;
   }
 
@@ -91,7 +91,7 @@ export function isAchievementUnlocked(reward: Reward, context: CosmeticContext) 
 
 export function isLevelUnlocked(reward: Reward, context: CosmeticContext) {
   const levelRequirement = requiredLevel(reward);
-  return context.isAdmin || !levelRequirement || context.level >= levelRequirement;
+  return context.canBypassLocks || !levelRequirement || context.level >= levelRequirement;
 }
 
 export function unlockRequirementLabel(reward: Reward) {
@@ -173,6 +173,17 @@ export function equipCosmeticInState(
     }
 
     return ownedReward;
+  });
+}
+
+export function unequipCosmeticTypeInState(
+  userRewards: UserReward[],
+  rewards: Reward[],
+  type: "title" | "frame",
+) {
+  return userRewards.map((ownedReward) => {
+    const rewardType = rewards.find((item) => item.id === ownedReward.rewardId)?.type;
+    return rewardType === type ? { ...ownedReward, equippedAt: null } : ownedReward;
   });
 }
 

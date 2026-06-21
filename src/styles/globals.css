@@ -3,6 +3,7 @@
 @import "@fontsource/noto-sans-tc/700.css";
 @import "@fontsource/noto-sans-tc/800.css";
 @import "@fontsource/noto-sans-tc/900.css";
+@import "@fontsource/cinzel-decorative/700.css";
 
 :root {
   --bg: #faf5ec;
@@ -14,6 +15,18 @@
   --accent: #c8832b;
   --accent-strong: #9d6422;
   --accent-soft: #fff0d6;
+  --rarity-common: #4f8b62;
+  --rarity-common-soft: #edf6ee;
+  --rarity-common-border: #bfd9c5;
+  --rarity-rare: #3f6fa8;
+  --rarity-rare-soft: #edf4fb;
+  --rarity-rare-border: #bfd2e8;
+  --rarity-epic: #7b5cab;
+  --rarity-epic-soft: #f3eef9;
+  --rarity-epic-border: #d5c5eb;
+  --rarity-legendary: #c56f24;
+  --rarity-legendary-soft: #fff1df;
+  --rarity-legendary-border: #edc49d;
   --pink: #d88ca0;
   --pink-soft: #fae8ee;
   --danger: #b4574b;
@@ -1893,10 +1906,28 @@ select:focus {
   width: 40px;
 }
 
-.cosmetic-mark.epic,
+.cosmetic-mark.common {
+  --cosmetic-accent: var(--rarity-common);
+  background: var(--rarity-common-soft);
+  border-color: var(--rarity-common-border);
+}
+
+.cosmetic-mark.rare {
+  --cosmetic-accent: var(--rarity-rare);
+  background: var(--rarity-rare-soft);
+  border-color: var(--rarity-rare-border);
+}
+
+.cosmetic-mark.epic {
+  --cosmetic-accent: var(--rarity-epic);
+  background: linear-gradient(135deg, var(--rarity-epic-soft), #ffffff);
+  border-color: var(--rarity-epic-border);
+}
+
 .cosmetic-mark.legendary {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--cosmetic-accent) 22%, #ffffff), #ffffff);
+  --cosmetic-accent: var(--rarity-legendary);
+  background: linear-gradient(135deg, var(--rarity-legendary-soft), #ffffff);
+  border-color: var(--rarity-legendary-border);
 }
 
 .rarity-pill {
@@ -1908,19 +1939,23 @@ select:focus {
 }
 
 .rarity-pill.common {
-  background: #f2e6d5;
-  color: #755a3a !important;
+  background: var(--rarity-common-soft);
+  color: var(--rarity-common) !important;
 }
 
 .rarity-pill.rare {
-  background: #e4f0ec;
-  color: #3f6d5f !important;
+  background: var(--rarity-rare-soft);
+  color: var(--rarity-rare) !important;
 }
 
-.rarity-pill.epic,
+.rarity-pill.epic {
+  background: var(--rarity-epic-soft);
+  color: var(--rarity-epic) !important;
+}
+
 .rarity-pill.legendary {
-  background: #eee6f6;
-  color: #684c91 !important;
+  background: var(--rarity-legendary-soft);
+  color: var(--rarity-legendary) !important;
 }
 
 .cosmetic-title-text {
@@ -1929,15 +1964,68 @@ select:focus {
   letter-spacing: 0;
 }
 
+.cosmetic-title-display {
+  background: linear-gradient(92deg, #8c4d16 0%, #c8832b 42%, #462519 100%);
+  background-clip: text;
+  color: transparent !important;
+  display: inline-block;
+  font-family: "Cinzel Decorative", "Noto Sans TC", serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-shadow: 0 10px 24px rgba(140, 77, 22, 0.16);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 .player-profile {
   gap: 20px;
 }
 
 .profile-hero {
   --profile-frame-accent: #e5c387;
+  --profile-frame-gradient: linear-gradient(135deg, rgba(255, 246, 232, 0.96), rgba(250, 232, 238, 0.72));
+  --profile-frame-ring: color-mix(in srgb, var(--profile-frame-accent) 20%, transparent);
   background:
-    linear-gradient(135deg, rgba(255, 246, 232, 0.96), rgba(250, 232, 238, 0.72)),
+    var(--profile-frame-gradient),
     #ffffff;
+  overflow: hidden;
+  position: relative;
+}
+
+.profile-hero.framed {
+  border-color: color-mix(in srgb, var(--profile-frame-accent) 62%, #ffffff);
+  box-shadow:
+    0 18px 44px color-mix(in srgb, var(--profile-frame-accent) 16%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--profile-frame-accent) 28%, transparent);
+}
+
+.profile-hero.framed::before {
+  background:
+    radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--profile-frame-accent) 28%, transparent), transparent 28%),
+    linear-gradient(90deg, color-mix(in srgb, var(--profile-frame-accent) 18%, transparent), transparent 58%);
+  content: "";
+  inset: 0;
+  opacity: 0.9;
+  pointer-events: none;
+  position: absolute;
+}
+
+.profile-hero.framed > * {
+  position: relative;
+  z-index: 1;
+}
+
+.profile-hero.frame-warm {
+  --profile-frame-gradient: linear-gradient(135deg, #fff3dc 0%, #fffaf1 45%, #f4d49c 100%);
+}
+
+.profile-hero.frame-focus {
+  --profile-frame-gradient: linear-gradient(135deg, #eef5f2 0%, #fffdf7 48%, #d8e7e0 100%);
+}
+
+.profile-hero.frame-flame {
+  --profile-frame-gradient: linear-gradient(135deg, #fff1df 0%, #fffaf1 40%, #ffd0b5 72%, #f49a64 100%);
 }
 
 .player-avatar {
@@ -1945,7 +2033,9 @@ select:focus {
   background: #3a2b22;
   border: 4px solid var(--profile-frame-accent);
   border-radius: 8px;
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--profile-frame-accent) 20%, transparent);
+  box-shadow:
+    0 0 0 5px var(--profile-frame-ring),
+    0 16px 34px color-mix(in srgb, var(--profile-frame-accent) 24%, transparent);
   color: #fff7ec;
   display: inline-flex;
   font-size: 30px;
@@ -2043,14 +2133,92 @@ select:focus {
 }
 
 .profile-equipped-grid {
+  display: block;
+}
+
+.profile-cosmetics-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   display: grid;
-  gap: 18px;
+  gap: 16px;
+  padding: 20px;
+}
+
+.profile-cosmetics-head {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.profile-cosmetics-head p {
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+.equipped-summary-grid {
+  display: grid;
+  gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.equipped-panel {
+.equipped-summary {
+  align-items: center;
+  background: #fffdf8;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 40px auto;
+  min-height: 76px;
+  padding: 14px;
+}
+
+.equipped-summary.empty {
+  grid-template-columns: minmax(0, 1fr) 40px;
+}
+
+.equipped-summary.common,
+.equip-row.common.equipped,
+.badge-card.common.owned {
+  background: var(--rarity-common-soft);
+  border-color: var(--rarity-common-border);
+}
+
+.equipped-summary.rare,
+.equip-row.rare.equipped,
+.badge-card.rare.owned {
+  background: var(--rarity-rare-soft);
+  border-color: var(--rarity-rare-border);
+}
+
+.equipped-summary.epic,
+.equip-row.epic.equipped,
+.badge-card.epic.owned {
+  background: var(--rarity-epic-soft);
+  border-color: var(--rarity-epic-border);
+}
+
+.equipped-summary.legendary,
+.equip-row.legendary.equipped,
+.badge-card.legendary.owned {
+  background: var(--rarity-legendary-soft);
+  border-color: var(--rarity-legendary-border);
+}
+
+.equipped-summary span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 3px;
+}
+
+.equipped-summary strong {
+  display: block;
+  font-size: 18px;
+  min-width: 0;
 }
 
 .equip-row {
@@ -2058,11 +2226,6 @@ select:focus {
   grid-template-columns: 40px minmax(0, 1fr);
   text-align: left;
   width: 100%;
-}
-
-.equip-row.equipped {
-  background: #fff1db;
-  border-color: #e5c387;
 }
 
 .equip-row span {
@@ -2094,6 +2257,10 @@ select:focus {
   gap: 8px;
   min-height: 144px;
   padding: 14px;
+}
+
+.badge-card.owned .cosmetic-mark {
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--cosmetic-accent) 14%, transparent);
 }
 
 .badge-card.locked {

@@ -138,8 +138,8 @@ export const seedRewards: Reward[] = [
   },
   {
     id: "frame_warm_standard",
-    name: "Warm Standard",
-    description: "A clean bronze frame for your profile.",
+    name: "Bronze Halo",
+    description: "A warm profile glow with a soft bronze edge.",
     cost: 260,
     type: "frame",
     metadata: {
@@ -153,8 +153,8 @@ export const seedRewards: Reward[] = [
   },
   {
     id: "frame_deep_focus",
-    name: "Deep Focus",
-    description: "A restrained frame for steady progress.",
+    name: "Zenith Glass",
+    description: "A cool glass frame with a quiet premium finish.",
     cost: 760,
     type: "frame",
     metadata: {
@@ -168,8 +168,8 @@ export const seedRewards: Reward[] = [
   },
   {
     id: "frame_flame_line",
-    name: "Flame Line",
-    description: "Unlocked by a 14-day check-in streak.",
+    name: "Ember Line",
+    description: "A streak-forged frame with a bright ember gradient.",
     cost: 0,
     type: "frame",
     metadata: {

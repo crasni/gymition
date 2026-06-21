@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="zh-Hant">
+      <html lang="en">
         <body>{children}</body>
       </html>
     </ClerkProvider>

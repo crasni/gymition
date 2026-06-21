@@ -4,7 +4,7 @@ import { setWeeklyGoalAction } from "@/features/goals/goal-actions";
 import { checkinLifeHabitAction } from "@/features/life/life-actions";
 import { resetProfileDataAction, updateProfileAction } from "@/features/profile/profile-actions";
 import { GymitionPrototype } from "@/features/prototype/GymitionPrototype";
-import { equipRewardAction, purchaseRewardAction } from "@/features/rewards/reward-actions";
+import { equipRewardAction, purchaseRewardAction, unequipRewardAction } from "@/features/rewards/reward-actions";
 import { completeWorkoutAction } from "@/features/workouts/workout-actions";
 
 type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "leaderboard" | "profile";
@@ -24,6 +24,7 @@ export async function GymitionApp({ view }: { view: AppView }) {
         completeWorkout: completeWorkoutAction,
         purchaseReward: purchaseRewardAction,
         equipReward: equipRewardAction,
+        unequipReward: unequipRewardAction,
         updateProfile: updateProfileAction,
         resetProfileData: resetProfileDataAction,
         setWeeklyGoal: setWeeklyGoalAction,

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.6",
+    "@fontsource/cinzel-decorative": "^5.2.8",
     "@fontsource/noto-sans-tc": "^5.2.9",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.21.0",

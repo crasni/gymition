@@ -49,7 +49,7 @@ export type UserProfile = {
   coins: number;
   xp: number;
   currentStreak: number;
-  isAdmin: boolean;
+  role: "user" | "tester";
   lastLoginRewardDate: string | null;
   createdAt: string;
 };

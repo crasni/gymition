@@ -66,6 +66,7 @@ import {
   isEquippableCosmetic,
   isLevelUnlocked,
   requiredLevel,
+  unequipCosmeticTypeInState,
   unlockRequirementLabel,
   type CosmeticContext,
   type CosmeticFilter,
@@ -98,6 +99,7 @@ type ServerActions = {
       }) => Promise<void>;
   purchaseReward?: (input: { rewardId: string }) => Promise<void>;
   equipReward?: (input: { rewardId: string }) => Promise<void>;
+  unequipReward?: (input: { type: "title" | "frame" }) => Promise<void>;
   updateProfile?: (input: { username: string }) => Promise<void>;
   resetProfileData?: () => Promise<void>;
   setWeeklyGoal?: (input: { workoutTarget: number; cardioTarget: number }) => Promise<void>;
@@ -549,11 +551,12 @@ export function GymitionPrototype({
 
   function purchaseReward(reward: Reward) {
     const actionKey = `reward-${reward.id}`;
+    const hasTestResources = state.user.role === "tester";
     if (
       cosmeticSource(reward) !== "shop" ||
-      (!state.user.isAdmin && state.user.coins < reward.cost) ||
+      (!hasTestResources && state.user.coins < reward.cost) ||
       ownedRewardIds.has(reward.id) ||
-      (!state.user.isAdmin && !isLevelUnlocked(reward, cosmeticContext)) ||
+      (!hasTestResources && !isLevelUnlocked(reward, cosmeticContext)) ||
       pendingActions.has(actionKey)
     ) {
       return;
@@ -564,7 +567,7 @@ export function GymitionPrototype({
       ...current,
       user: {
         ...current.user,
-        coins: current.user.isAdmin ? current.user.coins : current.user.coins - reward.cost,
+        coins: current.user.role === "tester" ? current.user.coins : current.user.coins - reward.cost,
       },
       userRewards: [
         ...current.userRewards,
@@ -575,7 +578,7 @@ export function GymitionPrototype({
         },
       ],
       coinLedger:
-        current.user.isAdmin || reward.cost <= 0
+        current.user.role === "tester" || reward.cost <= 0
           ? current.coinLedger
           : [...current.coinLedger, createLedgerEntry(-reward.cost, "reward_purchase", "reward", reward.id)],
     }));
@@ -602,6 +605,24 @@ export function GymitionPrototype({
     if (actions.equipReward) {
       runServerAction(async () => {
         await actions.equipReward?.({ rewardId: reward.id });
+      }, actionKey);
+    }
+  }
+
+  function unequipReward(type: "title" | "frame") {
+    const actionKey = `unequip-${type}`;
+    if (pendingActions.has(actionKey)) {
+      return;
+    }
+
+    applyStateUpdate((current) => ({
+      ...current,
+      userRewards: unequipCosmeticTypeInState(current.userRewards, rewards, type),
+    }));
+
+    if (actions.unequipReward) {
+      runServerAction(async () => {
+        await actions.unequipReward?.({ type });
       }, actionKey);
     }
   }
@@ -806,6 +827,7 @@ export function GymitionPrototype({
           userRewards={state.userRewards}
           onPurchaseReward={purchaseReward}
           onEquipReward={equipReward}
+          onUnequipReward={unequipReward}
           pendingActions={pendingActions}
         />
       )}
@@ -838,9 +860,12 @@ export function GymitionPrototype({
           rewards={rewards}
           userRewards={state.userRewards}
           onEquipReward={equipReward}
+          onUnequipReward={unequipReward}
           onSaveProfile={saveProfile}
           onResetProfileData={resetProfileData}
           resetPending={pendingActions.has("reset-profile")}
+          titleUnequipPending={pendingActions.has("unequip-title")}
+          frameUnequipPending={pendingActions.has("unequip-frame")}
         />
       )}
       {dailyCheckinSummary && (
@@ -1953,6 +1978,7 @@ function RewardsView({
   userRewards,
   onPurchaseReward,
   onEquipReward,
+  onUnequipReward,
   pendingActions,
 }: {
   rewards: Reward[];
@@ -1962,6 +1988,7 @@ function RewardsView({
   userRewards: UserReward[];
   onPurchaseReward: (reward: Reward) => void;
   onEquipReward: (reward: Reward) => void;
+  onUnequipReward: (type: "title" | "frame") => void;
   pendingActions: Set<string>;
 }) {
   const [filter, setFilter] = useState<CosmeticFilter>("all");
@@ -2005,11 +2032,15 @@ function RewardsView({
           const owned = ownedRewardIds.has(reward.id);
           const equipped = equippedRewardIds.has(reward.id);
           const source = cosmeticSource(reward);
-          const levelLocked = !context.isAdmin && !isLevelUnlocked(reward, context);
-          const achievementLocked = !context.isAdmin && source === "achievement" && !owned;
+          const levelLocked = !context.canBypassLocks && !isLevelUnlocked(reward, context);
+          const achievementLocked = !context.canBypassLocks && source === "achievement" && !owned;
           const locked = levelLocked || achievementLocked;
-          const canBuy = source === "shop" && !owned && !locked && (context.isAdmin || coins >= reward.cost);
-          const pending = pendingActions.has(`reward-${reward.id}`) || pendingActions.has(`equip-${reward.id}`);
+          const canBuy = source === "shop" && !owned && !locked && (context.canBypassLocks || coins >= reward.cost);
+          const canUnequip = equipped && isEquippableCosmetic(reward);
+          const pending =
+            pendingActions.has(`reward-${reward.id}`) ||
+            pendingActions.has(`equip-${reward.id}`) ||
+            pendingActions.has(`unequip-${reward.type}`);
 
           return (
             <div className={locked ? "shop-item-row locked" : "shop-item-row"} key={reward.id}>
@@ -2027,8 +2058,12 @@ function RewardsView({
                 <button
                   className="primary-action compact-action"
                   type="button"
-                  disabled={pending || locked || (!owned && !canBuy) || equipped}
+                  disabled={pending || locked || (!owned && !canBuy) || (equipped && !canUnequip)}
                   onClick={() => {
+                    if (canUnequip) {
+                      onUnequipReward("title");
+                      return;
+                    }
                     if (owned && isEquippableCosmetic(reward)) {
                       onEquipReward(reward);
                       return;
@@ -2036,7 +2071,7 @@ function RewardsView({
                     onPurchaseReward(reward);
                   }}
                 >
-                  {shopActionLabel(reward, { owned, equipped, locked, canBuy, coins })}
+                  {canUnequip ? "Unequip" : shopActionLabel(reward, { owned, equipped, locked, canBuy, coins })}
                 </button>
               </div>
             </div>
@@ -2056,14 +2091,19 @@ function LeaderboardView({
   checkinStreaks: LeaderboardEntry[];
   levels: LeaderboardEntry[];
 }) {
-  const streakEntries = mergeCurrentUserLeaderboardEntry(
-    checkinStreaks,
-    createCurrentUserLeaderboardEntry(currentUser, currentUser.currentStreak),
-  );
-  const levelEntries = mergeCurrentUserLeaderboardEntry(
-    levels,
-    createCurrentUserLeaderboardEntry(currentUser, levelFromXp(currentUser.xp)),
-  );
+  const isRankedUser = currentUser.role === "user";
+  const streakEntries = isRankedUser
+    ? mergeCurrentUserLeaderboardEntry(
+        checkinStreaks,
+        createCurrentUserLeaderboardEntry(currentUser, currentUser.currentStreak),
+      )
+    : checkinStreaks;
+  const levelEntries = isRankedUser
+    ? mergeCurrentUserLeaderboardEntry(
+        levels,
+        createCurrentUserLeaderboardEntry(currentUser, levelFromXp(currentUser.xp)),
+      )
+    : levels;
 
   return (
     <div className="leaderboard-layout">
@@ -2143,38 +2183,74 @@ function createCurrentUserLeaderboardEntry(
 }
 
 function EquippedCosmeticPanel({
-  title,
-  emptyLabel,
-  rewards,
-  equippedReward,
+  titles,
+  frames,
+  equippedTitle,
+  equippedFrame,
   equippedRewardIds,
   onEquipReward,
+  onUnequipReward,
+  titleUnequipPending,
+  frameUnequipPending,
 }: {
-  title: string;
-  emptyLabel: string;
-  rewards: Reward[];
-  equippedReward?: Reward;
+  titles: Reward[];
+  frames: Reward[];
+  equippedTitle?: Reward;
+  equippedFrame?: Reward;
   equippedRewardIds: Set<string>;
   onEquipReward: (reward: Reward) => void;
+  onUnequipReward: (type: "title" | "frame") => void;
+  titleUnequipPending: boolean;
+  frameUnequipPending: boolean;
 }) {
+  const [filter, setFilter] = useState<"all" | "title" | "frame">("all");
+  const visibleRewards = filter === "title" ? titles : filter === "frame" ? frames : [...titles, ...frames];
+
   return (
-    <section className="equipped-panel">
-      <div className="section-heading">
+    <section className="profile-cosmetics-panel">
+      <div className="profile-cosmetics-head">
         <div>
-          <h2>{title}</h2>
-          <p>{equippedReward?.name ?? emptyLabel}</p>
+          <h2>Cosmetics</h2>
+          <p>Equip one title and one frame for your profile.</p>
         </div>
-        {equippedReward ? <CosmeticMark reward={equippedReward} /> : <Sparkles size={20} aria-hidden />}
+        <div className="shop-tabs" role="tablist" aria-label="Cosmetic filters">
+          {(["all", "title", "frame"] as const).map((item) => (
+            <button
+              className={filter === item ? "active" : ""}
+              key={item}
+              type="button"
+              onClick={() => setFilter(item)}
+            >
+              {item === "all" ? "All" : item === "title" ? "Titles" : "Frames"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="equipped-summary-grid">
+        <EquippedSummary
+          label="Title"
+          reward={equippedTitle}
+          emptyLabel="No title equipped"
+          pending={titleUnequipPending}
+          onUnequip={() => onUnequipReward("title")}
+        />
+        <EquippedSummary
+          label="Frame"
+          reward={equippedFrame}
+          emptyLabel="No frame equipped"
+          pending={frameUnequipPending}
+          onUnequip={() => onUnequipReward("frame")}
+        />
       </div>
       <div className="equip-list">
-        {rewards.length === 0 ? (
-          <p className="empty-copy">Unlock one from the shop or achievements.</p>
+        {visibleRewards.length === 0 ? (
+          <p className="empty-copy">Unlock cosmetics from the shop or achievements.</p>
         ) : (
-          rewards.map((reward) => {
+          visibleRewards.map((reward) => {
             const equipped = equippedRewardIds.has(reward.id);
             return (
               <button
-                className={equipped ? "equip-row equipped" : "equip-row"}
+                className={`equip-row ${cosmeticRarity(reward)} ${equipped ? "equipped" : ""}`}
                 key={reward.id}
                 type="button"
                 disabled={equipped}
@@ -2191,6 +2267,47 @@ function EquippedCosmeticPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function EquippedSummary({
+  label,
+  reward,
+  emptyLabel,
+  pending,
+  onUnequip,
+}: {
+  label: "Title" | "Frame";
+  reward?: Reward;
+  emptyLabel: string;
+  pending: boolean;
+  onUnequip: () => void;
+}) {
+  return (
+    <div className={reward ? `equipped-summary ${cosmeticRarity(reward)}` : "equipped-summary empty"}>
+      <div>
+        <span>{label}</span>
+        <strong className={reward?.type === "title" ? "cosmetic-title-text" : undefined}>
+          {reward?.name ?? emptyLabel}
+        </strong>
+      </div>
+      {reward ? (
+        <>
+          <CosmeticMark reward={reward} />
+          <button
+            className="ghost-light-action compact-action"
+            type="button"
+            onClick={onUnequip}
+            disabled={pending}
+          >
+            <X size={16} aria-hidden />
+            Unequip
+          </button>
+        </>
+      ) : (
+        <Sparkles size={20} aria-hidden />
+      )}
+    </div>
   );
 }
 
@@ -2269,9 +2386,12 @@ function ProfileView({
   rewards,
   userRewards,
   onEquipReward,
+  onUnequipReward,
   onSaveProfile,
   onResetProfileData,
   resetPending,
+  titleUnequipPending,
+  frameUnequipPending,
 }: {
   state: GymitionState;
   level: number;
@@ -2282,9 +2402,12 @@ function ProfileView({
   rewards: Reward[];
   userRewards: UserReward[];
   onEquipReward: (reward: Reward) => void;
+  onUnequipReward: (type: "title" | "frame") => void;
   onSaveProfile: (username: string) => void;
   onResetProfileData: () => void;
   resetPending: boolean;
+  titleUnequipPending: boolean;
+  frameUnequipPending: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -2324,7 +2447,7 @@ function ProfileView({
   return (
     <div className="player-profile">
       <section
-        className="profile-hero"
+        className={equippedFrame ? `profile-hero framed frame-${equippedFrame.metadata.frameClass ?? "custom"}` : "profile-hero"}
         style={{ "--profile-frame-accent": equippedFrame ? cosmeticAccent(equippedFrame) : "#e5c387" } as CSSProperties}
       >
         <div className="player-avatar">{state.user.username.slice(0, 2).toUpperCase()}</div>
@@ -2341,7 +2464,9 @@ function ProfileView({
           ) : (
             <>
               <h2>{state.user.username}</h2>
-              <p className="profile-title cosmetic-title-text">{equippedTitle?.metadata.title ?? "No title equipped"}</p>
+              <p className={equippedTitle ? "profile-title cosmetic-title-display" : "profile-title"}>
+                {equippedTitle?.metadata.title ?? "No title equipped"}
+              </p>
               <div className="profile-identity-tags">
                 <span>Level {level}</span>
                 <span>{state.user.coins} coins</span>
@@ -2409,20 +2534,15 @@ function ProfileView({
 
       <section className="profile-equipped-grid">
         <EquippedCosmeticPanel
-          title="Title"
-          emptyLabel="No title equipped"
-          rewards={titles}
-          equippedReward={equippedTitle}
+          titles={titles}
+          frames={frames}
+          equippedTitle={equippedTitle}
+          equippedFrame={equippedFrame}
           equippedRewardIds={equippedRewardIds}
           onEquipReward={onEquipReward}
-        />
-        <EquippedCosmeticPanel
-          title="Frame"
-          emptyLabel="No frame equipped"
-          rewards={frames}
-          equippedReward={equippedFrame}
-          equippedRewardIds={equippedRewardIds}
-          onEquipReward={onEquipReward}
+          onUnequipReward={onUnequipReward}
+          titleUnequipPending={titleUnequipPending}
+          frameUnequipPending={frameUnequipPending}
         />
       </section>
 
@@ -2437,7 +2557,10 @@ function ProfileView({
           {badges.map((reward) => {
             const owned = ownedRewardIds.has(reward.id);
             return (
-              <div className={owned ? "badge-card owned" : "badge-card locked"} key={reward.id}>
+              <div
+                className={owned ? `badge-card owned ${cosmeticRarity(reward)}` : "badge-card locked"}
+                key={reward.id}
+              >
                 <CosmeticMark reward={reward} />
                 <strong>{reward.name}</strong>
                 <span>{owned ? reward.description : unlockRequirementLabel(reward)}</span>
@@ -2498,7 +2621,7 @@ function createInitialState(): GymitionState {
       coins: 0,
       xp: 0,
       currentStreak: 0,
-      isAdmin: false,
+      role: "user",
       lastLoginRewardDate: null,
       createdAt: nowIso(),
     },
@@ -2643,8 +2766,8 @@ function resetAppDataState(current: GymitionState): GymitionState {
     ...current,
     user: {
       ...current.user,
-      coins: current.user.isAdmin ? current.user.coins : 0,
-      xp: current.user.isAdmin ? current.user.xp : 0,
+      coins: current.user.role === "tester" ? current.user.coins : 0,
+      xp: current.user.role === "tester" ? current.user.xp : 0,
       currentStreak: 0,
       lastLoginRewardDate: null,
     },

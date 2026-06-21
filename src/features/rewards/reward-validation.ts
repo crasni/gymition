@@ -11,3 +11,9 @@ export const equipRewardSchema = z.object({
 });
 
 export type EquipRewardInput = z.infer<typeof equipRewardSchema>;
+
+export const unequipRewardSchema = z.object({
+  type: z.enum(["title", "frame"]),
+});
+
+export type UnequipRewardInput = z.infer<typeof unequipRewardSchema>;

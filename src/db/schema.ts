@@ -33,6 +33,7 @@ export const measurementTypeEnum = pgEnum("measurement_type", [
 
 export const workoutStatusEnum = pgEnum("workout_status", ["draft", "completed", "cancelled"]);
 export const workoutModeEnum = pgEnum("workout_mode", ["detailed", "simple"]);
+export const userRoleEnum = pgEnum("user_role", ["user", "tester"]);
 
 export const ledgerReasonEnum = pgEnum("ledger_reason", [
   "daily_login",
@@ -75,7 +76,7 @@ export const users = pgTable(
     coins: integer("coins").notNull().default(0),
     xp: integer("xp").notNull().default(0),
     currentStreak: integer("current_streak").notNull().default(0),
-    isAdmin: boolean("is_admin").notNull().default(false),
+    role: userRoleEnum("role").notNull().default("user"),
     lastLoginRewardDate: date("last_login_reward_date"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

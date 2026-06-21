@@ -23,8 +23,9 @@ import {
 } from "@/features/rewards/cosmetic-rules";
 import { calculateLifeStreak } from "@/features/life/life-streak";
 import { requireCurrentAppUser } from "@/features/users/current-user";
+import { canBypassCosmeticLocks } from "@/features/users/roles";
 import { createId } from "@/lib/ids";
-import { equipRewardSchema, purchaseRewardSchema } from "./reward-validation";
+import { equipRewardSchema, purchaseRewardSchema, unequipRewardSchema } from "./reward-validation";
 
 export async function purchaseRewardAction(input: unknown) {
   const parsed = purchaseRewardSchema.parse(input);
@@ -58,10 +59,10 @@ export async function purchaseRewardAction(input: unknown) {
       completedWorkouts: 0,
       currentCoins: freshUser.coins,
       lifetimeCoins: 0,
-      isAdmin: freshUser.isAdmin,
+      canBypassLocks: canBypassCosmeticLocks(freshUser.role),
     };
 
-    if (!freshUser.isAdmin && !isLevelUnlocked(reward, purchaseContext)) {
+    if (!canBypassCosmeticLocks(freshUser.role) && !isLevelUnlocked(reward, purchaseContext)) {
       throw new Error(`Reach level ${requiredLevel(reward)} to unlock this item.`);
     }
 
@@ -81,7 +82,7 @@ export async function purchaseRewardAction(input: unknown) {
       throw new Error("Reward already owned.");
     }
 
-    if (!freshUser.isAdmin) {
+    if (!canBypassCosmeticLocks(freshUser.role)) {
       const [updatedUser] = await tx
         .update(users)
         .set({
@@ -96,7 +97,7 @@ export async function purchaseRewardAction(input: unknown) {
       }
     }
 
-    if (reward.cost > 0 && !freshUser.isAdmin) {
+    if (reward.cost > 0 && !canBypassCosmeticLocks(freshUser.role)) {
       await tx.insert(coinLedgerEntries).values({
         id: createId("coin_ledger"),
         userId: appUser.id,
@@ -105,6 +106,27 @@ export async function purchaseRewardAction(input: unknown) {
         sourceType: "reward",
         sourceId: reward.id,
       });
+    }
+  });
+
+  revalidatePath("/rewards");
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+}
+
+export async function unequipRewardAction(input: unknown) {
+  const parsed = unequipRewardSchema.parse(input);
+  const appUser = await requireCurrentAppUser();
+  const db = getDb();
+
+  await db.transaction(async (tx) => {
+    const sameTypeRewards = await tx.select({ id: rewards.id }).from(rewards).where(eq(rewards.type, parsed.type));
+
+    for (const reward of sameTypeRewards) {
+      await tx
+        .update(userRewards)
+        .set({ equippedAt: null })
+        .where(and(eq(userRewards.userId, appUser.id), eq(userRewards.rewardId, reward.id)));
     }
   });
 
@@ -206,6 +228,6 @@ async function buildServerCosmeticContext(
         createdAt: entry.createdAt.toISOString(),
       })),
     ),
-    isAdmin: freshUser.isAdmin,
+    canBypassLocks: canBypassCosmeticLocks(freshUser.role),
   };
 }

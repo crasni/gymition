@@ -57,6 +57,13 @@
       "when": 1782015300000,
       "tag": "0007_admin_users",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782016200000,
+      "tag": "0008_user_roles",
+      "breakpoints": true
     }
   ]
 }
