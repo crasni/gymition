@@ -2,6 +2,7 @@
 @import "@fontsource/noto-sans-tc/500.css";
 @import "@fontsource/noto-sans-tc/700.css";
 @import "@fontsource/noto-sans-tc/800.css";
+@import "@fontsource/noto-sans-tc/900.css";
 
 :root {
   --bg: #faf5ec;
@@ -665,6 +666,14 @@ h2 {
   color: var(--accent-strong);
   display: flex;
   justify-content: space-between;
+}
+
+.rail-heading span {
+  color: var(--muted);
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 4px;
 }
 
 .text-action {
@@ -1373,7 +1382,8 @@ select:focus {
 .shop-container,
 .profile-hero,
 .profile-progression,
-.profile-inventory {
+.profile-inventory,
+.equipped-panel {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1737,13 +1747,15 @@ select:focus {
 
 .detail-entry-list,
 .shop-list,
-.inventory-list {
+.inventory-list,
+.equip-list {
   display: grid;
   gap: 10px;
 }
 
 .shop-item-row,
-.inventory-row {
+.inventory-row,
+.equip-row {
   align-items: center;
   background: #fffaf1;
   border: 1px solid transparent;
@@ -1804,6 +1816,12 @@ select:focus {
   gap: 18px;
 }
 
+.shop-head p,
+.section-heading p {
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
 .shop-head > strong {
   background: var(--accent-soft);
   border-radius: 8px;
@@ -1811,8 +1829,39 @@ select:focus {
   padding: 10px 12px;
 }
 
+.shop-tabs {
+  background: #fffaf1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  width: fit-content;
+}
+
+.shop-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.shop-tabs button.active {
+  background: #ffffff;
+  box-shadow: 0 5px 14px rgba(89, 62, 33, 0.08);
+  color: var(--text);
+}
+
 .shop-item-row {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.shop-item-row.locked {
+  opacity: 0.68;
 }
 
 .shop-item-row p {
@@ -1831,11 +1880,61 @@ select:focus {
   justify-items: end;
 }
 
+.cosmetic-mark {
+  --cosmetic-accent: var(--accent);
+  align-items: center;
+  background: color-mix(in srgb, var(--cosmetic-accent) 16%, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--cosmetic-accent) 40%, #ffffff);
+  border-radius: 8px;
+  color: var(--cosmetic-accent);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.cosmetic-mark.epic,
+.cosmetic-mark.legendary {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--cosmetic-accent) 22%, #ffffff), #ffffff);
+}
+
+.rarity-pill {
+  border-radius: 999px;
+  font-size: 11px !important;
+  font-weight: 900;
+  padding: 4px 7px;
+  text-transform: capitalize;
+}
+
+.rarity-pill.common {
+  background: #f2e6d5;
+  color: #755a3a !important;
+}
+
+.rarity-pill.rare {
+  background: #e4f0ec;
+  color: #3f6d5f !important;
+}
+
+.rarity-pill.epic,
+.rarity-pill.legendary {
+  background: #eee6f6;
+  color: #684c91 !important;
+}
+
+.cosmetic-title-text {
+  font-family: "Noto Sans TC", Arial, "PingFang TC", sans-serif;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .player-profile {
   gap: 20px;
 }
 
 .profile-hero {
+  --profile-frame-accent: #e5c387;
   background:
     linear-gradient(135deg, rgba(255, 246, 232, 0.96), rgba(250, 232, 238, 0.72)),
     #ffffff;
@@ -1844,8 +1943,9 @@ select:focus {
 .player-avatar {
   align-items: center;
   background: #3a2b22;
-  border: 3px solid #e5c387;
+  border: 4px solid var(--profile-frame-accent);
   border-radius: 8px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--profile-frame-accent) 20%, transparent);
   color: #fff7ec;
   display: inline-flex;
   font-size: 30px;
@@ -1868,6 +1968,28 @@ select:focus {
   margin: 6px 0 0;
 }
 
+.player-identity .profile-title {
+  color: var(--accent-strong);
+  font-size: 17px;
+}
+
+.profile-identity-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-identity-tags span {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+
 .profile-actions {
   display: flex;
   gap: 8px;
@@ -1881,12 +2003,18 @@ select:focus {
   display: grid;
   gap: 8px;
   min-width: 260px;
+  width: min(420px, 42vw);
 }
 
 .profile-level-meter > span {
   color: var(--muted);
   font-size: 13px;
   text-align: right;
+}
+
+.profile-progression p {
+  color: var(--muted);
+  margin: 4px 0 0;
 }
 
 .profile-stat-lanes {
@@ -1914,8 +2042,69 @@ select:focus {
   font-size: 28px;
 }
 
+.profile-equipped-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.equipped-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.equip-row {
+  border: 1px solid var(--border);
+  grid-template-columns: 40px minmax(0, 1fr);
+  text-align: left;
+  width: 100%;
+}
+
+.equip-row.equipped {
+  background: #fff1db;
+  border-color: #e5c387;
+}
+
+.equip-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.equip-row small {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
 .inventory-row {
   grid-template-columns: 40px minmax(0, 1fr);
+}
+
+.badge-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.badge-card {
+  background: #fffaf1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-height: 144px;
+  padding: 14px;
+}
+
+.badge-card.locked {
+  background: #fffdf9;
+  opacity: 0.62;
+}
+
+.badge-card span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2071,6 +2260,7 @@ select:focus {
   .history-layout,
   .two-column,
   .life-checkin-grid,
+  .profile-equipped-grid,
   .profile-stat-lanes {
     grid-template-columns: 1fr;
   }
@@ -2183,6 +2373,18 @@ select:focus {
   .shop-item-action {
     align-items: stretch;
     justify-items: stretch;
+  }
+
+  .shop-tabs {
+    width: 100%;
+  }
+
+  .shop-tabs button {
+    flex: 1;
+  }
+
+  .profile-level-meter {
+    width: 100%;
   }
 
   .simple-workout-panel {

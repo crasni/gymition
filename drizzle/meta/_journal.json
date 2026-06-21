@@ -43,6 +43,20 @@
       "when": 1781943300000,
       "tag": "0005_cleanup_rls_advisors",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782014400000,
+      "tag": "0006_cosmetic_frames",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782015300000,
+      "tag": "0007_admin_users",
+      "breakpoints": true
     }
   ]
 }

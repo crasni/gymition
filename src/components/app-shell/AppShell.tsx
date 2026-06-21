@@ -4,7 +4,6 @@ import { SignOutButton } from "@clerk/nextjs";
 import Link from "next/link";
 import {
   Dumbbell,
-  Gift,
   Flame,
   HeartPulse,
   History,
@@ -13,12 +12,14 @@ import {
   Medal,
   Menu,
   RotateCcw,
+  ShoppingBag,
   Trophy,
   User,
   X,
 } from "lucide-react";
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { levelFromXp, xpForNextLevel } from "@/features/economy/xp-rules";
+import { isPlainLeftClick } from "@/lib/navigation-events";
 
 export type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "leaderboard" | "profile";
 
@@ -26,7 +27,7 @@ const navItems = [
   { view: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { view: "workout", href: "/workout", label: "Workout", icon: Dumbbell },
   { view: "history", href: "/history", label: "History", icon: History },
-  { view: "rewards", href: "/rewards", label: "Rewards", icon: Gift },
+  { view: "rewards", href: "/rewards", label: "Shop", icon: ShoppingBag },
   { view: "life", href: "/life", label: "Life", icon: HeartPulse },
   { view: "leaderboard", href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { view: "profile", href: "/profile", label: "Profile", icon: User },
@@ -103,7 +104,7 @@ export function AppShell({
                 if (!onNavigate) {
                   return;
                 }
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                if (!isPlainLeftClick(event)) {
                   return;
                 }
 
@@ -188,7 +189,7 @@ function activeViewLabel(view: AppView) {
   if (view === "dashboard") return "Dashboard";
   if (view === "workout") return "Workout Log";
   if (view === "history") return "History";
-  if (view === "rewards") return "Reward Shop";
+  if (view === "rewards") return "Shop";
   if (view === "life") return "Life Tracker";
   if (view === "leaderboard") return "Leaderboard";
   return "Profile";

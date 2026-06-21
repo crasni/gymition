@@ -62,7 +62,7 @@ export const questTargetTypeEnum = pgEnum("quest_target_type", [
   "duration_seconds",
 ]);
 
-export const rewardTypeEnum = pgEnum("reward_type", ["title", "badge", "theme", "avatar_item", "custom"]);
+export const rewardTypeEnum = pgEnum("reward_type", ["title", "badge", "frame", "theme", "avatar_item", "custom"]);
 
 export const lifeHabitTypeEnum = pgEnum("life_habit_type", ["face_wash", "tooth_brush"]);
 
@@ -75,6 +75,7 @@ export const users = pgTable(
     coins: integer("coins").notNull().default(0),
     xp: integer("xp").notNull().default(0),
     currentStreak: integer("current_streak").notNull().default(0),
+    isAdmin: boolean("is_admin").notNull().default(false),
     lastLoginRewardDate: date("last_login_reward_date"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -49,6 +49,7 @@ export type UserProfile = {
   coins: number;
   xp: number;
   currentStreak: number;
+  isAdmin: boolean;
   lastLoginRewardDate: string | null;
   createdAt: string;
 };
@@ -58,7 +59,7 @@ export type Reward = {
   name: string;
   description: string;
   cost: number;
-  type: "title" | "badge" | "theme" | "avatar_item" | "custom";
+  type: "title" | "badge" | "frame" | "theme" | "avatar_item" | "custom";
   metadata: Record<string, string>;
   isActive: boolean;
 };

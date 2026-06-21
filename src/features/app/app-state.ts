@@ -31,6 +31,7 @@ import type {
 } from "@/features/economy/types";
 import { levelFromXp } from "@/features/economy/xp-rules";
 import { calculateLifeStreak, getLifeHabitMap, isLifeDayComplete } from "@/features/life/life-streak";
+import { ADMIN_RESOURCE_BALANCE } from "@/features/users/admin";
 import { requireCurrentAppUser } from "@/features/users/current-user";
 import { localDateKey, localWeekStartKey } from "@/lib/dates";
 
@@ -107,6 +108,7 @@ export async function loadGymitionAppState() {
         value: users.currentStreak,
       })
       .from(users)
+      .where(eq(users.isAdmin, false))
       .orderBy(desc(users.currentStreak), desc(users.lastLoginRewardDate))
       .limit(10),
     db
@@ -116,6 +118,7 @@ export async function loadGymitionAppState() {
         value: users.xp,
       })
       .from(users)
+      .where(eq(users.isAdmin, false))
       .orderBy(desc(users.xp))
       .limit(10),
   ]);
@@ -167,9 +170,10 @@ export async function loadGymitionAppState() {
       id: appUser.id,
       email: appUser.email,
       username: appUser.username,
-      coins: appUser.coins,
-      xp: appUser.xp,
+      coins: appUser.isAdmin ? ADMIN_RESOURCE_BALANCE : appUser.coins,
+      xp: appUser.isAdmin ? ADMIN_RESOURCE_BALANCE : appUser.xp,
       currentStreak: appUser.currentStreak,
+      isAdmin: appUser.isAdmin,
       lastLoginRewardDate: appUser.lastLoginRewardDate,
       createdAt: appUser.createdAt.toISOString(),
     },

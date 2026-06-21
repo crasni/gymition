@@ -2,6 +2,7 @@
 
 import {
   ArrowRight,
+  Award,
   BadgeCheck,
   CalendarDays,
   ChevronLeft,
@@ -18,13 +19,14 @@ import {
   Pencil,
   Plus,
   Save,
-  ShoppingBag,
+  Shield,
   SmilePlus,
   Sparkles,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, type AppView } from "@/components/app-shell/AppShell";
 import {
@@ -32,7 +34,7 @@ import {
   createLedgerEntry,
   REWARD_RULES,
 } from "@/features/economy/reward-rules";
-import { levelFromXp } from "@/features/economy/xp-rules";
+import { levelFromXp, xpForNextLevel } from "@/features/economy/xp-rules";
 import type {
   Exercise,
   GymitionState,
@@ -44,6 +46,7 @@ import type {
   LifeHabitType,
   Quest,
   Reward,
+  UserReward,
   WorkoutEntry,
   WorkoutSession,
 } from "@/features/economy/types";
@@ -51,10 +54,27 @@ import { seedExercises } from "@/features/exercises/seed-exercises";
 import { calculateLifeStreak, getLifeHabitMap, isLifeDayComplete } from "@/features/life/life-streak";
 import { calculateQuestProgress, getDailyQuestKey } from "@/features/quests/quest-engine";
 import { dailyQuests } from "@/features/quests/quest-rules";
+import {
+  buildCosmeticContext,
+  cosmeticAccent,
+  cosmeticRarity,
+  cosmeticSource,
+  equipCosmeticInState,
+  getEquippedCosmetic,
+  getOwnedCosmeticIds,
+  isCosmeticType,
+  isEquippableCosmetic,
+  isLevelUnlocked,
+  requiredLevel,
+  unlockRequirementLabel,
+  type CosmeticContext,
+  type CosmeticFilter,
+} from "@/features/rewards/cosmetic-rules";
 import { seedRewards } from "@/features/rewards/reward-service";
 import { nextLoginStreak } from "@/features/streaks/streak-service";
 import { formatShortDate, localDateKey } from "@/lib/dates";
 import { createId } from "@/lib/ids";
+import { isPlainLeftClick } from "@/lib/navigation-events";
 
 type ServerActions = {
   claimDailyReward?: () => Promise<DailyCheckinSummary>;
@@ -77,6 +97,7 @@ type ServerActions = {
         notes?: string;
       }) => Promise<void>;
   purchaseReward?: (input: { rewardId: string }) => Promise<void>;
+  equipReward?: (input: { rewardId: string }) => Promise<void>;
   updateProfile?: (input: { username: string }) => Promise<void>;
   resetProfileData?: () => Promise<void>;
   setWeeklyGoal?: (input: { workoutTarget: number; cardioTarget: number }) => Promise<void>;
@@ -262,10 +283,15 @@ export function GymitionPrototype({
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 8);
   const level = levelFromXp(state.user.xp);
-  const ownedRewardIds = new Set(state.userRewards.map((reward) => reward.rewardId));
-  const equippedReward = rewards.find((reward) =>
-    state.userRewards.some((userReward) => userReward.rewardId === reward.id && userReward.equippedAt),
+  const today = localDateKey();
+  const checkedInToday = state.user.lastLoginRewardDate === today;
+  const cosmeticContext = useMemo(() => buildCosmeticContext(state), [state]);
+  const ownedRewardIds = useMemo(
+    () => getOwnedCosmeticIds(rewards, state.userRewards, cosmeticContext),
+    [cosmeticContext, rewards, state.userRewards],
   );
+  const equippedTitle = getEquippedCosmetic(rewards, state.userRewards, "title");
+  const equippedFrame = getEquippedCosmetic(rewards, state.userRewards, "frame");
 
   function markActionPending(key: string) {
     setPendingActions((current) => {
@@ -332,8 +358,7 @@ export function GymitionPrototype({
   }
 
   function claimDailyReward() {
-    const today = localDateKey();
-    if (state.user.lastLoginRewardDate === today || pendingActions.has("daily-reward")) {
+    if (checkedInToday || pendingActions.has("daily-reward")) {
       return;
     }
 
@@ -366,7 +391,7 @@ export function GymitionPrototype({
             coinsEarned: REWARD_RULES.dailyLogin.coins,
             xpEarned: REWARD_RULES.dailyLogin.xp,
             streakBonusCoins: streakBonus,
-            createdAt: new Date().toISOString(),
+            createdAt: nowIso(),
           },
           ...current.dailyCheckins,
         ],
@@ -418,7 +443,7 @@ export function GymitionPrototype({
             coinsEarned: REWARD_RULES.dailyLogin.coins,
             xpEarned: REWARD_RULES.dailyLogin.xp,
             streakBonusCoins: streakBonus,
-            createdAt: new Date().toISOString(),
+            createdAt: nowIso(),
           },
           ...current.dailyCheckins,
         ],
@@ -469,7 +494,7 @@ export function GymitionPrototype({
     const submittedEntries = [...draftEntries];
     const submittedDurationSeconds = simpleDurationSeconds;
     const submittedNotes = simpleWorkoutNotes;
-    const optimisticNow = new Date().toISOString();
+    const optimisticNow = nowIso();
     const optimisticWorkoutId = createId("workout");
 
     applyStateUpdate((current) =>
@@ -524,33 +549,59 @@ export function GymitionPrototype({
 
   function purchaseReward(reward: Reward) {
     const actionKey = `reward-${reward.id}`;
-    if (state.user.coins < reward.cost || ownedRewardIds.has(reward.id) || pendingActions.has(actionKey)) {
+    if (
+      cosmeticSource(reward) !== "shop" ||
+      (!state.user.isAdmin && state.user.coins < reward.cost) ||
+      ownedRewardIds.has(reward.id) ||
+      (!state.user.isAdmin && !isLevelUnlocked(reward, cosmeticContext)) ||
+      pendingActions.has(actionKey)
+    ) {
       return;
     }
+    const purchasedAt = nowIso();
 
     applyStateUpdate((current) => ({
       ...current,
       user: {
         ...current.user,
-        coins: current.user.coins - reward.cost,
+        coins: current.user.isAdmin ? current.user.coins : current.user.coins - reward.cost,
       },
       userRewards: [
         ...current.userRewards,
         {
           rewardId: reward.id,
-          purchasedAt: new Date().toISOString(),
-          equippedAt: reward.type === "title" ? new Date().toISOString() : null,
+          purchasedAt,
+          equippedAt: null,
         },
       ],
-      coinLedger: [
-        ...current.coinLedger,
-        createLedgerEntry(-reward.cost, "reward_purchase", "reward", reward.id),
-      ],
+      coinLedger:
+        current.user.isAdmin || reward.cost <= 0
+          ? current.coinLedger
+          : [...current.coinLedger, createLedgerEntry(-reward.cost, "reward_purchase", "reward", reward.id)],
     }));
 
     if (actions.purchaseReward) {
       runServerAction(async () => {
         await actions.purchaseReward?.({ rewardId: reward.id });
+      }, actionKey);
+    }
+  }
+
+  function equipReward(reward: Reward) {
+    const actionKey = `equip-${reward.id}`;
+    if (!isEquippableCosmetic(reward) || !ownedRewardIds.has(reward.id) || pendingActions.has(actionKey)) {
+      return;
+    }
+
+    const equippedAt = nowIso();
+    applyStateUpdate((current) => ({
+      ...current,
+      userRewards: equipCosmeticInState(current.userRewards, rewards, reward, equippedAt),
+    }));
+
+    if (actions.equipReward) {
+      runServerAction(async () => {
+        await actions.equipReward?.({ rewardId: reward.id });
       }, actionKey);
     }
   }
@@ -653,7 +704,7 @@ export function GymitionPrototype({
           id: createId("life_checkin"),
           checkinDate: today,
           habitType,
-          createdAt: new Date().toISOString(),
+          createdAt: nowIso(),
         },
       ];
       const todayHabits = getLifeHabitMap(nextCheckins).get(today);
@@ -700,7 +751,7 @@ export function GymitionPrototype({
       coins={state.user.coins}
       xp={state.user.xp}
       streak={state.user.currentStreak}
-      checkedInToday={state.user.lastLoginRewardDate === localDateKey()}
+      checkedInToday={checkedInToday}
       username={state.user.username}
       onReset={resetDemo}
       onNavigate={navigateView}
@@ -715,7 +766,7 @@ export function GymitionPrototype({
           questProgress={questProgress}
           recentLedger={recentLedger}
           onClaimDailyReward={claimDailyReward}
-          dailyClaimed={state.user.lastLoginRewardDate === localDateKey() || pendingActions.has("daily-reward")}
+          dailyClaimed={checkedInToday || pendingActions.has("daily-reward")}
           quests={quests}
           onSetWeeklyGoal={setWeeklyGoal}
           goalPending={pendingActions.has("weekly-goal")}
@@ -750,8 +801,12 @@ export function GymitionPrototype({
         <RewardsView
           rewards={rewards}
           coins={state.user.coins}
+          context={cosmeticContext}
           ownedRewardIds={ownedRewardIds}
+          userRewards={state.userRewards}
           onPurchaseReward={purchaseReward}
+          onEquipReward={equipReward}
+          pendingActions={pendingActions}
         />
       )}
 
@@ -776,9 +831,13 @@ export function GymitionPrototype({
         <ProfileView
           state={state}
           level={level}
-          equippedReward={equippedReward}
+          equippedTitle={equippedTitle}
+          equippedFrame={equippedFrame}
+          context={cosmeticContext}
           ownedRewardIds={ownedRewardIds}
           rewards={rewards}
+          userRewards={state.userRewards}
+          onEquipReward={equipReward}
           onSaveProfile={saveProfile}
           onResetProfileData={resetProfileData}
           resetPending={pendingActions.has("reset-profile")}
@@ -1203,7 +1262,7 @@ function DashboardView({
             className="start-workout-action"
             href="/workout"
             onClick={(event) => {
-              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+              if (!isPlainLeftClick(event)) {
                 return;
               }
 
@@ -1247,8 +1306,7 @@ function DashboardView({
           <section className="activity-panel">
             <div className="section-heading">
               <div>
-                <p className="section-label">Recent activity</p>
-                <h2>Latest rewards</h2>
+                <h2>Latest earnings</h2>
               </div>
             </div>
             <div className="ledger-list">
@@ -1270,8 +1328,8 @@ function DashboardView({
           <section className="today-panel">
             <div className="rail-heading">
               <div>
-                <p className="section-label">Daily quests</p>
-                <h2>{completedQuestCount}/{totalQuestCount} complete</h2>
+                <h2>Daily quests</h2>
+                <span>{completedQuestCount}/{totalQuestCount} complete</span>
               </div>
               <CalendarDays size={18} aria-hidden />
             </div>
@@ -1339,7 +1397,6 @@ function LifeView({
     <div className="life-layout">
       <section className="life-hero">
         <div>
-          <p className="section-label">Life streak</p>
           <h2>{summary.todayCompleted ? "Today's life check-in is complete" : "Check off both daily basics"}</h2>
           <p>Wash your face and brush your teeth to extend your Life streak.</p>
         </div>
@@ -1387,7 +1444,6 @@ function LifeView({
       <section className="life-calendar-panel">
         <div className="life-calendar-head">
           <div>
-            <p className="section-label">Calendar</p>
             <h2>{monthTitle}</h2>
           </div>
           <div className="calendar-controls">
@@ -1471,7 +1527,6 @@ function WeeklyGoalPanel({
     <section className="weekly-goal-panel">
       <div className="section-heading">
         <div>
-          <p className="section-label">Weekly goals</p>
           <h2>{state.weeklyGoal ? "Track your training rhythm" : "Set your weekly targets"}</h2>
         </div>
         {state.weeklyGoal && !editing && (
@@ -1577,7 +1632,6 @@ function WorkoutView({
     <div className="workout-layout">
       <section className="workout-toolbar">
         <div>
-          <p className="section-label">Current workout</p>
           <h2>
             {mode === "simple"
               ? `${simpleDurationMinutes || 0} minute session`
@@ -1618,7 +1672,7 @@ function WorkoutView({
             <div className="workout-list-head">
               <span>Exercise</span>
               <span>Details</span>
-              <span>Rewards</span>
+              <span>Earnings</span>
               <span aria-hidden />
             </div>
             <div className="entry-list workout-entry-list">
@@ -1702,7 +1756,6 @@ function WorkoutView({
           <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="add-exercise-title">
             <div className="modal-head">
               <div>
-                <p className="section-label">Add exercise</p>
                 <h2 id="add-exercise-title">Log one training item</h2>
               </div>
               <button className="icon-button" type="button" aria-label="Close" onClick={() => setIsAddExerciseOpen(false)}>
@@ -1820,8 +1873,7 @@ function HistoryView({ workouts, exercises }: { workouts: WorkoutSession[]; exer
       <section className="history-list-surface">
         <div className="section-heading">
           <div>
-            <p className="section-label">Completed workouts</p>
-            <h2>History</h2>
+            <h2>Completed workouts</h2>
           </div>
         </div>
         <div className="history-list">
@@ -1896,44 +1948,95 @@ function HistoryView({ workouts, exercises }: { workouts: WorkoutSession[]; exer
 function RewardsView({
   rewards,
   coins,
+  context,
   ownedRewardIds,
+  userRewards,
   onPurchaseReward,
+  onEquipReward,
+  pendingActions,
 }: {
   rewards: Reward[];
   coins: number;
+  context: CosmeticContext;
   ownedRewardIds: Set<string>;
+  userRewards: UserReward[];
   onPurchaseReward: (reward: Reward) => void;
+  onEquipReward: (reward: Reward) => void;
+  pendingActions: Set<string>;
 }) {
+  const [filter, setFilter] = useState<CosmeticFilter>("all");
+  const equippedRewardIds = new Set(userRewards.filter((reward) => reward.equippedAt).map((reward) => reward.rewardId));
+  const visibleRewards = rewards.filter((reward) => {
+    if (!isCosmeticType(reward) || reward.type === "badge") {
+      return false;
+    }
+    if (filter === "owned") {
+      return ownedRewardIds.has(reward.id);
+    }
+    if (filter === "all") {
+      return true;
+    }
+    return reward.type === filter;
+  });
+
   return (
     <section className="shop-container">
       <div className="shop-head">
         <div>
-          <p className="section-label">Reward shop</p>
-          <h2>Trade coins for training flair</h2>
+          <h2>Shop cosmetics</h2>
+          <p>Spend coins on titles and profile frames. Badges stay achievement-only.</p>
         </div>
         <strong>{coins} coins</strong>
       </div>
+      <div className="shop-tabs" role="tablist" aria-label="Shop filters">
+        {(["all", "title", "frame", "owned"] as CosmeticFilter[]).map((item) => (
+          <button
+            className={filter === item ? "active" : ""}
+            key={item}
+            type="button"
+            onClick={() => setFilter(item)}
+          >
+            {cosmeticFilterLabel(item)}
+          </button>
+        ))}
+      </div>
       <div className="shop-list">
-        {rewards.map((reward) => {
+        {visibleRewards.map((reward) => {
           const owned = ownedRewardIds.has(reward.id);
+          const equipped = equippedRewardIds.has(reward.id);
+          const source = cosmeticSource(reward);
+          const levelLocked = !context.isAdmin && !isLevelUnlocked(reward, context);
+          const achievementLocked = !context.isAdmin && source === "achievement" && !owned;
+          const locked = levelLocked || achievementLocked;
+          const canBuy = source === "shop" && !owned && !locked && (context.isAdmin || coins >= reward.cost);
+          const pending = pendingActions.has(`reward-${reward.id}`) || pendingActions.has(`equip-${reward.id}`);
+
           return (
-            <div className="shop-item-row" key={reward.id}>
+            <div className={locked ? "shop-item-row locked" : "shop-item-row"} key={reward.id}>
+              <CosmeticMark reward={reward} />
               <div className="shop-item-copy">
                 <div className="shop-item-title">
-                  <span className="item-type-badge">{rewardTypeLabel(reward.type)}</span>
-                  <strong>{reward.name}</strong>
+                  <strong className={reward.type === "title" ? "cosmetic-title-text" : undefined}>{reward.name}</strong>
+                  <span className={`rarity-pill ${cosmeticRarity(reward)}`}>{cosmeticRarity(reward)}</span>
                 </div>
                 <p>{reward.description}</p>
+                <span>{cosmeticItemStatus(reward, owned, context)}</span>
               </div>
               <div className="shop-item-action">
-                <strong>{reward.cost} coins</strong>
+                <strong>{source === "shop" ? `${reward.cost} coins` : "Achievement"}</strong>
                 <button
                   className="primary-action compact-action"
                   type="button"
-                  disabled={owned || coins < reward.cost}
-                  onClick={() => onPurchaseReward(reward)}
+                  disabled={pending || locked || (!owned && !canBuy) || equipped}
+                  onClick={() => {
+                    if (owned && isEquippableCosmetic(reward)) {
+                      onEquipReward(reward);
+                      return;
+                    }
+                    onPurchaseReward(reward);
+                  }}
                 >
-                  {owned ? "Owned" : "Redeem"}
+                  {shopActionLabel(reward, { owned, equipped, locked, canBuy, coins })}
                 </button>
               </div>
             </div>
@@ -1953,24 +2056,21 @@ function LeaderboardView({
   checkinStreaks: LeaderboardEntry[];
   levels: LeaderboardEntry[];
 }) {
-  const streakEntries = mergeCurrentUserLeaderboardEntry(checkinStreaks, {
-    userId: currentUser.id,
-    username: currentUser.username,
-    value: currentUser.currentStreak,
-  });
-  const levelEntries = mergeCurrentUserLeaderboardEntry(levels, {
-    userId: currentUser.id,
-    username: currentUser.username,
-    value: levelFromXp(currentUser.xp),
-  });
+  const streakEntries = mergeCurrentUserLeaderboardEntry(
+    checkinStreaks,
+    createCurrentUserLeaderboardEntry(currentUser, currentUser.currentStreak),
+  );
+  const levelEntries = mergeCurrentUserLeaderboardEntry(
+    levels,
+    createCurrentUserLeaderboardEntry(currentUser, levelFromXp(currentUser.xp)),
+  );
 
   return (
     <div className="leaderboard-layout">
       <section className="leaderboard-panel">
         <div className="section-heading">
           <div>
-            <p className="section-label">Check-in streak</p>
-            <h2>Most consistent</h2>
+            <h2>Check-in streak</h2>
           </div>
           <Flame size={20} aria-hidden />
         </div>
@@ -1984,8 +2084,7 @@ function LeaderboardView({
       <section className="leaderboard-panel">
         <div className="section-heading">
           <div>
-            <p className="section-label">Level</p>
-            <h2>Top progress</h2>
+            <h2>Level</h2>
           </div>
           <Sparkles size={20} aria-hidden />
         </div>
@@ -2032,21 +2131,157 @@ function mergeCurrentUserLeaderboardEntry(entries: LeaderboardEntry[], currentEn
   return merged.sort((a, b) => b.value - a.value || a.username.localeCompare(b.username)).slice(0, 10);
 }
 
+function createCurrentUserLeaderboardEntry(
+  user: GymitionState["user"],
+  value: number,
+): LeaderboardEntry {
+  return {
+    userId: user.id,
+    username: user.username,
+    value,
+  };
+}
+
+function EquippedCosmeticPanel({
+  title,
+  emptyLabel,
+  rewards,
+  equippedReward,
+  equippedRewardIds,
+  onEquipReward,
+}: {
+  title: string;
+  emptyLabel: string;
+  rewards: Reward[];
+  equippedReward?: Reward;
+  equippedRewardIds: Set<string>;
+  onEquipReward: (reward: Reward) => void;
+}) {
+  return (
+    <section className="equipped-panel">
+      <div className="section-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{equippedReward?.name ?? emptyLabel}</p>
+        </div>
+        {equippedReward ? <CosmeticMark reward={equippedReward} /> : <Sparkles size={20} aria-hidden />}
+      </div>
+      <div className="equip-list">
+        {rewards.length === 0 ? (
+          <p className="empty-copy">Unlock one from the shop or achievements.</p>
+        ) : (
+          rewards.map((reward) => {
+            const equipped = equippedRewardIds.has(reward.id);
+            return (
+              <button
+                className={equipped ? "equip-row equipped" : "equip-row"}
+                key={reward.id}
+                type="button"
+                disabled={equipped}
+                onClick={() => onEquipReward(reward)}
+              >
+                <CosmeticMark reward={reward} />
+                <span>
+                  <strong className={reward.type === "title" ? "cosmetic-title-text" : undefined}>{reward.name}</strong>
+                  <small>{equipped ? "Equipped" : `${cosmeticRarity(reward)} ${rewardTypeLabel(reward.type)}`}</small>
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CosmeticMark({ reward }: { reward: Reward }) {
+  return (
+    <span
+      className={`cosmetic-mark ${reward.type} ${cosmeticRarity(reward)}`}
+      style={{ "--cosmetic-accent": cosmeticAccent(reward) } as CSSProperties}
+    >
+      {renderCosmeticIcon(reward)}
+    </span>
+  );
+}
+
+function renderCosmeticIcon(reward: Reward) {
+  if (reward.type === "title") return <Sparkles size={18} aria-hidden />;
+  if (reward.type === "frame") return <Shield size={18} aria-hidden />;
+
+  const icon = reward.metadata.icon;
+  if (icon === "flame") return <Flame size={18} aria-hidden />;
+  if (icon === "coin") return <CircleDollarSign size={18} aria-hidden />;
+  if (icon === "star") return <Star size={18} aria-hidden />;
+  if (icon === "dumbbell") return <Dumbbell size={18} aria-hidden />;
+  return <Award size={18} aria-hidden />;
+}
+
+function cosmeticFilterLabel(filter: CosmeticFilter) {
+  const labels: Record<CosmeticFilter, string> = {
+    all: "All",
+    title: "Titles",
+    badge: "Badges",
+    frame: "Frames",
+    owned: "Owned",
+  };
+
+  return labels[filter];
+}
+
+function cosmeticItemStatus(reward: Reward, owned: boolean, context: CosmeticContext) {
+  if (owned) {
+    return "Unlocked";
+  }
+
+  if (cosmeticSource(reward) === "achievement") {
+    return unlockRequirementLabel(reward);
+  }
+
+  const levelRequirement = requiredLevel(reward);
+  if (levelRequirement && context.level < levelRequirement) {
+    return `Reach level ${levelRequirement}`;
+  }
+
+  return "Available in shop";
+}
+
+function shopActionLabel(
+  reward: Reward,
+  state: { owned: boolean; equipped: boolean; locked: boolean; canBuy: boolean; coins: number },
+) {
+  if (state.equipped) return "Equipped";
+  if (state.owned && isEquippableCosmetic(reward)) return "Equip";
+  if (state.owned) return "Owned";
+  if (state.locked) return "Locked";
+  if (cosmeticSource(reward) === "achievement") return "Earn";
+  if (!state.canBuy && state.coins < reward.cost) return "Need coins";
+  return "Buy";
+}
+
 function ProfileView({
   state,
   level,
-  equippedReward,
+  equippedTitle,
+  equippedFrame,
+  context,
   ownedRewardIds,
   rewards,
+  userRewards,
+  onEquipReward,
   onSaveProfile,
   onResetProfileData,
   resetPending,
 }: {
   state: GymitionState;
   level: number;
-  equippedReward?: Reward;
+  equippedTitle?: Reward;
+  equippedFrame?: Reward;
+  context: CosmeticContext;
   ownedRewardIds: Set<string>;
   rewards: Reward[];
+  userRewards: UserReward[];
+  onEquipReward: (reward: Reward) => void;
   onSaveProfile: (username: string) => void;
   onResetProfileData: () => void;
   resetPending: boolean;
@@ -2054,7 +2289,19 @@ function ProfileView({
   const [isEditing, setIsEditing] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState(state.user.username);
-  const ownedRewards = rewards.filter((reward) => ownedRewardIds.has(reward.id));
+  const equippedRewardIds = new Set(userRewards.filter((reward) => reward.equippedAt).map((reward) => reward.rewardId));
+  const titles = rewards.filter((reward) => reward.type === "title" && ownedRewardIds.has(reward.id));
+  const frames = rewards.filter((reward) => reward.type === "frame" && ownedRewardIds.has(reward.id));
+  const badges = rewards.filter((reward) => reward.type === "badge");
+  const nextUnlock = rewards
+    .filter((reward) => isCosmeticType(reward) && !ownedRewardIds.has(reward.id))
+    .sort((a, b) => (requiredLevel(a) ?? 99) - (requiredLevel(b) ?? 99))[0];
+  const nextLevelXp = xpForNextLevel(level);
+  const previousLevelXp = level <= 1 ? 0 : xpForNextLevel(level - 1);
+  const levelProgress = Math.min(
+    100,
+    Math.round(((state.user.xp - previousLevelXp) / (nextLevelXp - previousLevelXp)) * 100),
+  );
 
   function cancelEdit() {
     setUsernameDraft(state.user.username);
@@ -2076,10 +2323,12 @@ function ProfileView({
 
   return (
     <div className="player-profile">
-      <section className="profile-hero">
+      <section
+        className="profile-hero"
+        style={{ "--profile-frame-accent": equippedFrame ? cosmeticAccent(equippedFrame) : "#e5c387" } as CSSProperties}
+      >
         <div className="player-avatar">{state.user.username.slice(0, 2).toUpperCase()}</div>
         <div className="player-identity">
-          <p className="section-label">Player profile</p>
           {isEditing ? (
             <label className="profile-name-field">
               Display name
@@ -2092,7 +2341,12 @@ function ProfileView({
           ) : (
             <>
               <h2>{state.user.username}</h2>
-              <p>{equippedReward?.metadata.title ?? "No title equipped"}</p>
+              <p className="profile-title cosmetic-title-text">{equippedTitle?.metadata.title ?? "No title equipped"}</p>
+              <div className="profile-identity-tags">
+                <span>Level {level}</span>
+                <span>{state.user.coins} coins</span>
+                <span>{state.user.currentStreak} day streak</span>
+              </div>
             </>
           )}
         </div>
@@ -2123,14 +2377,14 @@ function ProfileView({
 
       <section className="profile-progression">
         <div>
-          <p className="section-label">Player progress</p>
           <h2>Level {level}</h2>
+          <p>{state.user.xp} / {nextLevelXp} XP</p>
         </div>
         <div className="profile-level-meter">
           <div className="meter compact">
-            <span style={{ width: `${Math.min(100, state.user.xp % 100)}%` }} />
+            <span style={{ width: `${levelProgress}%` }} />
           </div>
-          <span>{state.user.xp} XP</span>
+          <span>{nextUnlock ? `Next unlock: ${nextUnlock.name}` : "All current cosmetics unlocked"}</span>
         </div>
       </section>
 
@@ -2148,34 +2402,48 @@ function ProfileView({
           <strong>{state.workouts.length}</strong>
         </div>
         <div>
-          <span>Rewards</span>
-          <strong>{ownedRewardIds.size}</strong>
+          <span>Shop items</span>
+          <strong>{[...ownedRewardIds].length}</strong>
         </div>
+      </section>
+
+      <section className="profile-equipped-grid">
+        <EquippedCosmeticPanel
+          title="Title"
+          emptyLabel="No title equipped"
+          rewards={titles}
+          equippedReward={equippedTitle}
+          equippedRewardIds={equippedRewardIds}
+          onEquipReward={onEquipReward}
+        />
+        <EquippedCosmeticPanel
+          title="Frame"
+          emptyLabel="No frame equipped"
+          rewards={frames}
+          equippedReward={equippedFrame}
+          equippedRewardIds={equippedRewardIds}
+          onEquipReward={onEquipReward}
+        />
       </section>
 
       <section className="profile-inventory">
         <div className="section-heading">
           <div>
-            <p className="section-label">Showcase</p>
-            <h2>Owned rewards</h2>
+            <h2>Badge collection</h2>
+            <p>{badges.filter((reward) => ownedRewardIds.has(reward.id)).length}/{badges.length} collected</p>
           </div>
         </div>
-        <div className="inventory-list">
-          {ownedRewards.length === 0 ? (
-            <p className="empty-copy">No rewards redeemed yet. Complete workouts to earn coins.</p>
-          ) : (
-            ownedRewards.map((reward) => (
-              <div className="inventory-row" key={reward.id}>
-                <div className="reward-icon">
-                  <ShoppingBag size={18} aria-hidden />
-                </div>
-                <div>
-                  <strong>{reward.name}</strong>
-                  <span>{rewardTypeLabel(reward.type)}</span>
-                </div>
+        <div className="badge-grid">
+          {badges.map((reward) => {
+            const owned = ownedRewardIds.has(reward.id);
+            return (
+              <div className={owned ? "badge-card owned" : "badge-card locked"} key={reward.id}>
+                <CosmeticMark reward={reward} />
+                <strong>{reward.name}</strong>
+                <span>{owned ? reward.description : unlockRequirementLabel(reward)}</span>
               </div>
-            ))
-          )}
+            );
+          })}
         </div>
       </section>
       {isResetConfirmOpen && (
@@ -2183,7 +2451,6 @@ function ProfileView({
           <section className="modal-panel danger-modal" role="dialog" aria-modal="true" aria-labelledby="reset-data-title">
             <div className="modal-head">
               <div>
-                <p className="section-label">Testing reset</p>
                 <h2 id="reset-data-title">Reset all app data?</h2>
               </div>
               <button className="icon-button" type="button" aria-label="Close" onClick={() => setIsResetConfirmOpen(false)}>
@@ -2191,7 +2458,7 @@ function ProfileView({
               </button>
             </div>
             <p className="danger-copy">
-              This clears workouts, check-ins, rewards, quests, coins, XP, and streaks for this account. Your profile name stays.
+              This clears workouts, check-ins, shop items, quests, coins, XP, and streaks for this account. Your profile name stays.
             </p>
             <div className="modal-actions">
               <button className="ghost-light-action" type="button" onClick={() => setIsResetConfirmOpen(false)}>
@@ -2218,6 +2485,10 @@ function StatTile({ label, value, icon }: { label: string; value: string; icon: 
   );
 }
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
 function createInitialState(): GymitionState {
   return {
     user: {
@@ -2227,8 +2498,9 @@ function createInitialState(): GymitionState {
       coins: 0,
       xp: 0,
       currentStreak: 0,
+      isAdmin: false,
       lastLoginRewardDate: null,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso(),
     },
     coinLedger: [],
     xpLedger: [],
@@ -2287,7 +2559,7 @@ function applyAutoQuestRewards(state: GymitionState): GymitionState {
       },
       questRewards: {
         ...nextState.questRewards,
-        [key]: new Date().toISOString(),
+        [key]: nowIso(),
       },
       coinLedger: [
         ...nextState.coinLedger,
@@ -2371,8 +2643,8 @@ function resetAppDataState(current: GymitionState): GymitionState {
     ...current,
     user: {
       ...current.user,
-      coins: 0,
-      xp: 0,
+      coins: current.user.isAdmin ? current.user.coins : 0,
+      xp: current.user.isAdmin ? current.user.xp : 0,
       currentStreak: 0,
       lastLoginRewardDate: null,
     },
@@ -2394,16 +2666,14 @@ function resetAppDataState(current: GymitionState): GymitionState {
       cardioWorkoutsCompleted: 0,
     },
     leaderboard: {
-      checkinStreaks: mergeCurrentUserLeaderboardEntry(current.leaderboard.checkinStreaks, {
-        userId: current.user.id,
-        username: current.user.username,
-        value: 0,
-      }),
-      levels: mergeCurrentUserLeaderboardEntry(current.leaderboard.levels, {
-        userId: current.user.id,
-        username: current.user.username,
-        value: 1,
-      }),
+      checkinStreaks: mergeCurrentUserLeaderboardEntry(
+        current.leaderboard.checkinStreaks,
+        createCurrentUserLeaderboardEntry(current.user, 0),
+      ),
+      levels: mergeCurrentUserLeaderboardEntry(
+        current.leaderboard.levels,
+        createCurrentUserLeaderboardEntry(current.user, 1),
+      ),
     },
   };
 }
@@ -2532,7 +2802,7 @@ function ledgerReasonLabel(reason: LedgerReason) {
     exercise_logged: "Exercise logged",
     quest_completed: "Quest complete",
     streak_bonus: "Check-in streak bonus",
-    reward_purchase: "Reward redeemed",
+    reward_purchase: "Shop item redeemed",
     manual_adjustment: "Manual adjustment",
   };
 
@@ -2543,6 +2813,7 @@ function rewardTypeLabel(type: Reward["type"]) {
   const labels: Record<Reward["type"], string> = {
     title: "Title",
     badge: "Badge",
+    frame: "Frame",
     theme: "Theme",
     avatar_item: "Avatar item",
     custom: "Custom",

@@ -14,6 +14,7 @@ import {
   workoutSessions,
   xpLedgerEntries,
 } from "@/db/schema";
+import { ADMIN_RESOURCE_BALANCE } from "@/features/users/admin";
 import { requireCurrentAppUser } from "@/features/users/current-user";
 import { updateProfileSchema } from "./profile-validation";
 
@@ -51,8 +52,8 @@ export async function resetProfileDataAction() {
     await tx
       .update(users)
       .set({
-        coins: 0,
-        xp: 0,
+        coins: appUser.isAdmin ? ADMIN_RESOURCE_BALANCE : 0,
+        xp: appUser.isAdmin ? ADMIN_RESOURCE_BALANCE : 0,
         currentStreak: 0,
         lastLoginRewardDate: null,
         updatedAt: new Date(),
