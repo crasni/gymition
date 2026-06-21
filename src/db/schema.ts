@@ -190,7 +190,10 @@ export const coinLedgerEntries = pgTable(
     sourceId: text("source_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("coin_ledger_user_created_idx").on(table.userId, table.createdAt)],
+  (table) => [
+    index("coin_ledger_user_created_idx").on(table.userId, table.createdAt),
+    uniqueIndex("coin_ledger_user_event_unique").on(table.userId, table.reason, table.sourceType, table.sourceId),
+  ],
 );
 
 export const xpLedgerEntries = pgTable(
@@ -206,7 +209,10 @@ export const xpLedgerEntries = pgTable(
     sourceId: text("source_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("xp_ledger_user_created_idx").on(table.userId, table.createdAt)],
+  (table) => [
+    index("xp_ledger_user_created_idx").on(table.userId, table.createdAt),
+    uniqueIndex("xp_ledger_user_event_unique").on(table.userId, table.reason, table.sourceType, table.sourceId),
+  ],
 );
 
 export const quests = pgTable(

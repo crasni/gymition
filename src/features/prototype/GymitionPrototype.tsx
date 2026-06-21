@@ -281,7 +281,8 @@ export function GymitionPrototype({
     () => calculateQuestProgress(state, quests, exercises),
     [exercises, quests, state],
   );
-  const recentLedger = [...state.coinLedger, ...state.xpLedger]
+  const recentLedger = state.coinLedger
+    .filter((entry) => entry.amount > 0)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 8);
   const level = levelFromXp(state.user.xp);
@@ -400,7 +401,7 @@ export function GymitionPrototype({
         coinLedger: [
           ...current.coinLedger,
           createLedgerEntry(REWARD_RULES.dailyLogin.coins, "daily_login", "login", today),
-          createLedgerEntry(streakBonus, "streak_bonus", "login", today),
+          ...(streakBonus > 0 ? [createLedgerEntry(streakBonus, "streak_bonus", "login", today)] : []),
         ],
         xpLedger: [
           ...current.xpLedger,
@@ -422,7 +423,7 @@ export function GymitionPrototype({
       const streakBonus = calculateStreakBonus(nextStreak);
       const coinLedger: LedgerEntry[] = [
         createLedgerEntry(REWARD_RULES.dailyLogin.coins, "daily_login", "login", today),
-        createLedgerEntry(streakBonus, "streak_bonus", "login", today),
+        ...(streakBonus > 0 ? [createLedgerEntry(streakBonus, "streak_bonus", "login", today)] : []),
       ];
       const xpLedger: LedgerEntry[] = [
         createLedgerEntry(REWARD_RULES.dailyLogin.xp, "daily_login", "login", today),
@@ -824,10 +825,7 @@ export function GymitionPrototype({
           coins={state.user.coins}
           context={cosmeticContext}
           ownedRewardIds={ownedRewardIds}
-          userRewards={state.userRewards}
           onPurchaseReward={purchaseReward}
-          onEquipReward={equipReward}
-          onUnequipReward={unequipReward}
           pendingActions={pendingActions}
         />
       )}
@@ -1975,24 +1973,17 @@ function RewardsView({
   coins,
   context,
   ownedRewardIds,
-  userRewards,
   onPurchaseReward,
-  onEquipReward,
-  onUnequipReward,
   pendingActions,
 }: {
   rewards: Reward[];
   coins: number;
   context: CosmeticContext;
   ownedRewardIds: Set<string>;
-  userRewards: UserReward[];
   onPurchaseReward: (reward: Reward) => void;
-  onEquipReward: (reward: Reward) => void;
-  onUnequipReward: (type: "title" | "frame") => void;
   pendingActions: Set<string>;
 }) {
   const [filter, setFilter] = useState<CosmeticFilter>("all");
-  const equippedRewardIds = new Set(userRewards.filter((reward) => reward.equippedAt).map((reward) => reward.rewardId));
   const visibleRewards = rewards.filter((reward) => {
     if (!isCosmeticType(reward) || reward.type === "badge") {
       return false;
@@ -2030,17 +2021,12 @@ function RewardsView({
       <div className="shop-list">
         {visibleRewards.map((reward) => {
           const owned = ownedRewardIds.has(reward.id);
-          const equipped = equippedRewardIds.has(reward.id);
           const source = cosmeticSource(reward);
           const levelLocked = !context.canBypassLocks && !isLevelUnlocked(reward, context);
           const achievementLocked = !context.canBypassLocks && source === "achievement" && !owned;
           const locked = levelLocked || achievementLocked;
           const canBuy = source === "shop" && !owned && !locked && (context.canBypassLocks || coins >= reward.cost);
-          const canUnequip = equipped && isEquippableCosmetic(reward);
-          const pending =
-            pendingActions.has(`reward-${reward.id}`) ||
-            pendingActions.has(`equip-${reward.id}`) ||
-            pendingActions.has(`unequip-${reward.type}`);
+          const pending = pendingActions.has(`reward-${reward.id}`);
 
           return (
             <div className={locked ? "shop-item-row locked" : "shop-item-row"} key={reward.id}>
@@ -2058,20 +2044,12 @@ function RewardsView({
                 <button
                   className="primary-action compact-action"
                   type="button"
-                  disabled={pending || locked || (!owned && !canBuy) || (equipped && !canUnequip)}
+                  disabled={pending || locked || owned || !canBuy}
                   onClick={() => {
-                    if (canUnequip) {
-                      onUnequipReward("title");
-                      return;
-                    }
-                    if (owned && isEquippableCosmetic(reward)) {
-                      onEquipReward(reward);
-                      return;
-                    }
                     onPurchaseReward(reward);
                   }}
                 >
-                  {canUnequip ? "Unequip" : shopActionLabel(reward, { owned, equipped, locked, canBuy, coins })}
+                  {shopActionLabel(reward, { owned, locked, canBuy, coins })}
                 </button>
               </div>
             </div>
@@ -2365,10 +2343,8 @@ function cosmeticItemStatus(reward: Reward, owned: boolean, context: CosmeticCon
 
 function shopActionLabel(
   reward: Reward,
-  state: { owned: boolean; equipped: boolean; locked: boolean; canBuy: boolean; coins: number },
+  state: { owned: boolean; locked: boolean; canBuy: boolean; coins: number },
 ) {
-  if (state.equipped) return "Equipped";
-  if (state.owned && isEquippableCosmetic(reward)) return "Equip";
   if (state.owned) return "Owned";
   if (state.locked) return "Locked";
   if (cosmeticSource(reward) === "achievement") return "Earn";

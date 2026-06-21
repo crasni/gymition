@@ -64,6 +64,13 @@
       "when": 1782016200000,
       "tag": "0008_user_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782017100000,
+      "tag": "0009_ledger_event_uniqueness",
+      "breakpoints": true
     }
   ]
 }

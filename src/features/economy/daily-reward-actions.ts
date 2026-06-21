@@ -88,24 +88,25 @@ export async function claimDailyRewardAction() {
       })
       .where(eq(users.id, appUser.id));
 
-    await tx.insert(coinLedgerEntries).values([
-      {
-        id: createId("coin_ledger"),
-        userId: appUser.id,
-        amount: REWARD_RULES.dailyLogin.coins,
-        reason: "daily_login",
-        sourceType: "login",
-        sourceId: today,
-      },
-      {
+    await tx.insert(coinLedgerEntries).values({
+      id: createId("coin_ledger"),
+      userId: appUser.id,
+      amount: REWARD_RULES.dailyLogin.coins,
+      reason: "daily_login",
+      sourceType: "login",
+      sourceId: today,
+    });
+
+    if (streakBonus > 0) {
+      await tx.insert(coinLedgerEntries).values({
         id: createId("coin_ledger"),
         userId: appUser.id,
         amount: streakBonus,
         reason: "streak_bonus",
         sourceType: "login",
         sourceId: today,
-      },
-    ]);
+      });
+    }
 
     await tx.insert(xpLedgerEntries).values({
       id: createId("xp_ledger"),

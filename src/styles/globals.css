@@ -9,6 +9,13 @@
   --bg: #faf5ec;
   --panel: #ffffff;
   --panel-strong: #fff6e8;
+  --surface-main: #fffdf8;
+  --surface-main-strong: #fffaf1;
+  --surface-side: #fffaf2;
+  --surface-aux: rgba(255, 250, 241, 0.72);
+  --surface-item: #fffdf8;
+  --border-soft: rgba(234, 223, 204, 0.76);
+  --border-strong: #dfc8a7;
   --text: #2b2018;
   --muted: #766a61;
   --border: #eadfcc;
@@ -32,6 +39,10 @@
   --danger: #b4574b;
   --shadow: 0 18px 45px rgba(89, 62, 33, 0.08);
   --shadow-hover: 0 20px 52px rgba(89, 62, 33, 0.12);
+  --shadow-main: 0 18px 44px rgba(82, 58, 32, 0.11);
+  --shadow-main-strong: 0 24px 64px rgba(82, 58, 32, 0.14);
+  --shadow-main-inner: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  --shadow-side: 0 8px 24px rgba(82, 58, 32, 0.04);
   --transition: 180ms ease;
 }
 
@@ -485,9 +496,7 @@ h2 {
 
 .hero-command {
   align-items: stretch;
-  background:
-    linear-gradient(135deg, rgba(255, 246, 232, 0.95), rgba(250, 232, 238, 0.72)),
-    #ffffff;
+  background: var(--surface-main-strong);
   border: 1px solid #ead7b5;
   border-radius: 8px;
   display: grid;
@@ -710,7 +719,7 @@ h2 {
 .daily-panel {
   align-items: center;
   align-self: start;
-  background: linear-gradient(135deg, #ffffff 0%, #fff1d9 72%, #fae8ee 100%);
+  background: var(--surface-aux);
   grid-template-columns: 1fr auto;
 }
 
@@ -2272,6 +2281,238 @@ select:focus {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+/* Surface roles keep sections distinct without per-page one-off styling. */
+.hero-command,
+.life-calendar-panel,
+.shop-container,
+.leaderboard-panel,
+.profile-cosmetics-panel {
+  background: var(--surface-main);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow:
+    var(--shadow-main),
+    var(--shadow-main-inner);
+}
+
+.hero-command,
+.shop-container {
+  background: var(--surface-main-strong);
+  box-shadow:
+    var(--shadow-main-strong),
+    var(--shadow-main-inner);
+}
+
+.shop-container {
+  border-color: #d7bd94;
+  gap: 20px;
+  padding: 24px;
+  position: relative;
+}
+
+.shop-container::before {
+  background: var(--accent);
+  border-radius: 999px;
+  content: "";
+  height: 5px;
+  left: 24px;
+  position: absolute;
+  right: auto;
+  top: 0;
+  width: 128px;
+}
+
+.shop-head {
+  align-items: start;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-strong) 42%, #ffffff);
+  padding-bottom: 18px;
+}
+
+.shop-head h2 {
+  font-size: 30px;
+}
+
+.shop-head > strong {
+  background: #3a2b22;
+  box-shadow: 0 12px 26px rgba(58, 43, 34, 0.14);
+  color: #fff7ec;
+}
+
+.profile-hero {
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow:
+    var(--shadow-main),
+    var(--shadow-main-inner);
+}
+
+.profile-hero:not(.framed) {
+  background: var(--surface-main);
+}
+
+.today-panel,
+.activity-panel,
+.weekly-goal-panel,
+.workout-toolbar,
+.history-list-surface,
+.profile-progression,
+.profile-inventory {
+  background: var(--surface-side);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow: var(--shadow-side);
+}
+
+.today-panel,
+.weekly-goal-panel,
+.profile-progression {
+  border-left: 4px solid color-mix(in srgb, var(--accent) 62%, #ffffff);
+}
+
+.life-calendar-panel,
+.leaderboard-panel,
+.profile-cosmetics-panel {
+  position: relative;
+}
+
+.life-calendar-panel::before,
+.leaderboard-panel::before,
+.profile-cosmetics-panel::before {
+  background: rgba(200, 131, 43, 0.3);
+  border-radius: 12px 0 0 12px;
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 5px;
+}
+
+.daily-panel,
+.workout-footer,
+.life-scoreboard > div,
+.profile-stat-lanes,
+.shop-tabs,
+.mode-switch,
+.empty-copy,
+.equipped-summary {
+  background: var(--surface-aux);
+  border-color: var(--border-soft);
+}
+
+.shop-tabs {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 22px rgba(82, 58, 32, 0.06);
+}
+
+.stat-tile {
+  background: #ffffff;
+  border-right: 1px solid var(--border-soft);
+}
+
+.stat-tile:last-child {
+  border-right: 0;
+}
+
+.quest-row,
+.ledger-row,
+.entry-row,
+.leaderboard-row,
+.shop-item-row,
+.inventory-row,
+.equip-row,
+.workout-entry-row,
+.detail-entry-row,
+.life-checkin-card,
+.badge-card {
+  background: var(--surface-item);
+  border: 1px solid var(--border-soft);
+  transition:
+    background-color var(--transition),
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.shop-item-row {
+  background: #ffffff;
+  border-color: color-mix(in srgb, var(--border-strong) 42%, #ffffff);
+  box-shadow: 0 10px 26px rgba(82, 58, 32, 0.055);
+  min-height: 104px;
+  padding: 16px;
+}
+
+.shop-item-row:hover {
+  box-shadow: 0 16px 34px rgba(82, 58, 32, 0.09);
+}
+
+.shop-item-row.locked {
+  background: #fffdf8;
+  box-shadow: none;
+}
+
+.quest-row:hover,
+.ledger-row:hover,
+.entry-row:hover,
+.leaderboard-row:hover,
+.shop-item-row:hover,
+.inventory-row:hover,
+.equip-row:hover:not(:disabled),
+.life-checkin-card:hover:not(:disabled),
+.badge-card.owned:hover {
+  background: #fff8ed;
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.leaderboard-row.current,
+.quest-row.done {
+  background: #fff1db;
+  border-color: #e5c387;
+}
+
+.life-checkin-card.done,
+.equipped-summary.common,
+.equip-row.common.equipped,
+.badge-card.common.owned {
+  background: var(--rarity-common-soft);
+  border-color: var(--rarity-common-border);
+}
+
+.equipped-summary.rare,
+.equip-row.rare.equipped,
+.badge-card.rare.owned {
+  background: var(--rarity-rare-soft);
+  border-color: var(--rarity-rare-border);
+}
+
+.equipped-summary.epic,
+.equip-row.epic.equipped,
+.badge-card.epic.owned {
+  background: var(--rarity-epic-soft);
+  border-color: var(--rarity-epic-border);
+}
+
+.equipped-summary.legendary,
+.equip-row.legendary.equipped,
+.badge-card.legendary.owned {
+  background: var(--rarity-legendary-soft);
+  border-color: var(--rarity-legendary-border);
+}
+
+.section-heading h2,
+.shop-head h2,
+.profile-cosmetics-head h2,
+.life-calendar-head h2,
+.leaderboard-panel h2 {
+  letter-spacing: 0;
+}
+
+.section-heading p,
+.shop-head p,
+.profile-cosmetics-head p,
+.panel p {
+  color: color-mix(in srgb, var(--muted) 88%, #2b2018);
 }
 
 @media (prefers-reduced-motion: reduce) {
