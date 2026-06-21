@@ -9,6 +9,7 @@ import {
   lifeHabitCheckins,
   quests,
   rewards,
+  users,
   userQuests,
   userRewards,
   userWeeklyGoals,
@@ -23,10 +24,12 @@ import type {
   LifeHabitCheckin,
   Quest,
   Reward,
+  LeaderboardEntry,
   UserReward,
   WorkoutEntry,
   WorkoutSession,
 } from "@/features/economy/types";
+import { levelFromXp } from "@/features/economy/xp-rules";
 import { calculateLifeStreak, getLifeHabitMap, isLifeDayComplete } from "@/features/life/life-streak";
 import { requireCurrentAppUser } from "@/features/users/current-user";
 import { localDateKey, localWeekStartKey } from "@/lib/dates";
@@ -60,6 +63,8 @@ export async function loadGymitionAppState() {
     lifeHabitCheckinRows,
     currentWeeklyGoalRows,
     currentWeekWorkoutRows,
+    checkinLeaderboardRows,
+    levelLeaderboardRows,
   ] = await Promise.all([
     db.select().from(exercises).where(eq(exercises.isActive, true)),
     db.select().from(rewards).where(eq(rewards.isActive, true)),
@@ -95,6 +100,24 @@ export async function loadGymitionAppState() {
           lt(workoutSessions.completedAt, nextWeekStartDate),
         ),
       ),
+    db
+      .select({
+        userId: users.id,
+        username: users.username,
+        value: users.currentStreak,
+      })
+      .from(users)
+      .orderBy(desc(users.currentStreak), desc(users.lastLoginRewardDate))
+      .limit(10),
+    db
+      .select({
+        userId: users.id,
+        username: users.username,
+        value: users.xp,
+      })
+      .from(users)
+      .orderBy(desc(users.xp))
+      .limit(10),
   ]);
 
   const workoutIds = workoutRows.map((workout) => workout.id);
@@ -223,6 +246,14 @@ export async function loadGymitionAppState() {
       workoutsCompleted: currentWeekWorkoutRows.length,
       cardioWorkoutsCompleted: cardioSessionIds.size,
     },
+    leaderboard: {
+      checkinStreaks: checkinLeaderboardRows.map(toLeaderboardEntry),
+      levels: levelLeaderboardRows.map((entry) => ({
+        userId: entry.userId,
+        username: entry.username,
+        value: levelFromXp(entry.value),
+      })),
+    },
   };
 
   return {
@@ -263,5 +294,13 @@ export async function loadGymitionAppState() {
         isActive: quest.isActive,
       }),
     ),
+  };
+}
+
+function toLeaderboardEntry(entry: { userId: string; username: string; value: number }): LeaderboardEntry {
+  return {
+    userId: entry.userId,
+    username: entry.username,
+    value: entry.value,
   };
 }

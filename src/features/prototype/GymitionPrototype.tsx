@@ -38,6 +38,7 @@ import type {
   GymitionState,
   LedgerEntry,
   LedgerReason,
+  LeaderboardEntry,
   LifeCheckinSummary,
   LifeHabitCheckin,
   LifeHabitType,
@@ -763,6 +764,14 @@ export function GymitionPrototype({
         />
       )}
 
+      {!isPageSwapPending && displayView === "leaderboard" && (
+        <LeaderboardView
+          currentUser={state.user}
+          checkinStreaks={state.leaderboard.checkinStreaks}
+          levels={state.leaderboard.levels}
+        />
+      )}
+
       {!isPageSwapPending && displayView === "profile" && (
         <ProfileView
           state={state}
@@ -826,6 +835,7 @@ const loadingLayouts = {
   history: ["historyList"],
   rewards: ["shop"],
   life: ["lifeHero", "lifeCheckins", "lifeCalendar"],
+  leaderboard: ["leaderboard"],
   profile: ["profileHero", "profileStats", "profileInventory"],
 } satisfies Record<AppView, LoadingBlockKind[]>;
 
@@ -840,6 +850,7 @@ type LoadingBlockKind =
   | "lifeHero"
   | "lifeCheckins"
   | "lifeCalendar"
+  | "leaderboard"
   | "profileHero"
   | "profileStats"
   | "profileInventory";
@@ -990,6 +1001,15 @@ function LoadingBlock({ kind }: { kind: LoadingBlockKind }) {
     );
   }
 
+  if (kind === "leaderboard") {
+    return (
+      <section className="leaderboard-grid" aria-hidden>
+        <SkeletonLeaderboardPanel rows={6} />
+        <SkeletonLeaderboardPanel rows={6} />
+      </section>
+    );
+  }
+
   if (kind === "profileHero") {
     return (
       <section className="profile-hero loading-block" aria-hidden>
@@ -1030,6 +1050,7 @@ function loadingSurfaceClass(view: AppView) {
   if (view === "history") return "history-layout";
   if (view === "rewards") return "shop-container";
   if (view === "life") return "life-layout";
+  if (view === "leaderboard") return "leaderboard-layout";
   return "player-profile";
 }
 
@@ -1053,6 +1074,15 @@ function SkeletonRows({ count }: { count: number }) {
 function SkeletonPanel({ rows }: { rows: number }) {
   return (
     <section className="activity-panel loading-block loading-list" aria-hidden>
+      <SkeletonPanelHeader />
+      <SkeletonRows count={rows} />
+    </section>
+  );
+}
+
+function SkeletonLeaderboardPanel({ rows }: { rows: number }) {
+  return (
+    <section className="leaderboard-panel loading-block loading-list" aria-hidden>
       <SkeletonPanelHeader />
       <SkeletonRows count={rows} />
     </section>
@@ -1914,6 +1944,94 @@ function RewardsView({
   );
 }
 
+function LeaderboardView({
+  currentUser,
+  checkinStreaks,
+  levels,
+}: {
+  currentUser: GymitionState["user"];
+  checkinStreaks: LeaderboardEntry[];
+  levels: LeaderboardEntry[];
+}) {
+  const streakEntries = mergeCurrentUserLeaderboardEntry(checkinStreaks, {
+    userId: currentUser.id,
+    username: currentUser.username,
+    value: currentUser.currentStreak,
+  });
+  const levelEntries = mergeCurrentUserLeaderboardEntry(levels, {
+    userId: currentUser.id,
+    username: currentUser.username,
+    value: levelFromXp(currentUser.xp),
+  });
+
+  return (
+    <div className="leaderboard-layout">
+      <section className="leaderboard-panel">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Check-in streak</p>
+            <h2>Most consistent</h2>
+          </div>
+          <Flame size={20} aria-hidden />
+        </div>
+        <LeaderboardList
+          entries={streakEntries}
+          currentUserId={currentUser.id}
+          valueLabel={(value) => `${value} days`}
+        />
+      </section>
+
+      <section className="leaderboard-panel">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Level</p>
+            <h2>Top progress</h2>
+          </div>
+          <Sparkles size={20} aria-hidden />
+        </div>
+        <LeaderboardList
+          entries={levelEntries}
+          currentUserId={currentUser.id}
+          valueLabel={(value) => `Level ${value}`}
+        />
+      </section>
+    </div>
+  );
+}
+
+function LeaderboardList({
+  entries,
+  currentUserId,
+  valueLabel,
+}: {
+  entries: LeaderboardEntry[];
+  currentUserId: string;
+  valueLabel: (value: number) => string;
+}) {
+  return (
+    <div className="leaderboard-list">
+      {entries.map((entry, index) => (
+        <div
+          className={entry.userId === currentUserId ? "leaderboard-row current" : "leaderboard-row"}
+          key={entry.userId}
+        >
+          <span className="leaderboard-rank">{index + 1}</span>
+          <strong>{entry.username}</strong>
+          <span>{valueLabel(entry.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function mergeCurrentUserLeaderboardEntry(entries: LeaderboardEntry[], currentEntry: LeaderboardEntry) {
+  const merged = entries.some((entry) => entry.userId === currentEntry.userId)
+    ? entries.map((entry) => (entry.userId === currentEntry.userId ? currentEntry : entry))
+    : [...entries, currentEntry];
+
+  return merged.sort((a, b) => b.value - a.value || a.username.localeCompare(b.username)).slice(0, 10);
+}
+
 function ProfileView({
   state,
   level,
@@ -2129,6 +2247,22 @@ function createInitialState(): GymitionState {
       workoutsCompleted: 0,
       cardioWorkoutsCompleted: 0,
     },
+    leaderboard: {
+      checkinStreaks: [
+        {
+          userId: "local_user",
+          username: "Crasni",
+          value: 0,
+        },
+      ],
+      levels: [
+        {
+          userId: "local_user",
+          username: "Crasni",
+          value: 1,
+        },
+      ],
+    },
   };
 }
 
@@ -2258,6 +2392,18 @@ function resetAppDataState(current: GymitionState): GymitionState {
     weeklyGoalProgress: {
       workoutsCompleted: 0,
       cardioWorkoutsCompleted: 0,
+    },
+    leaderboard: {
+      checkinStreaks: mergeCurrentUserLeaderboardEntry(current.leaderboard.checkinStreaks, {
+        userId: current.user.id,
+        username: current.user.username,
+        value: 0,
+      }),
+      levels: mergeCurrentUserLeaderboardEntry(current.leaderboard.levels, {
+        userId: current.user.id,
+        username: current.user.username,
+        value: 1,
+      }),
     },
   };
 }

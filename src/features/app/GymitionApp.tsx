@@ -7,7 +7,7 @@ import { GymitionPrototype } from "@/features/prototype/GymitionPrototype";
 import { purchaseRewardAction } from "@/features/rewards/reward-actions";
 import { completeWorkoutAction } from "@/features/workouts/workout-actions";
 
-type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "profile";
+type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "leaderboard" | "profile";
 
 export async function GymitionApp({ view }: { view: AppView }) {
   const { state, exercises, quests, rewards } = await loadGymitionAppState();

@@ -737,6 +737,7 @@ h2 {
 .ledger-list,
 .entry-list,
 .history-list,
+.leaderboard-list,
 .profile-stats {
   display: grid;
   gap: 8px;
@@ -744,7 +745,8 @@ h2 {
 
 .quest-row,
 .ledger-row,
-.entry-row {
+.entry-row,
+.leaderboard-row {
   align-items: center;
   background: #fffaf1;
   border: 1px solid transparent;
@@ -753,6 +755,62 @@ h2 {
   gap: 12px;
   justify-content: space-between;
   padding: 12px;
+}
+
+.leaderboard-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.leaderboard-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.leaderboard-panel .section-heading {
+  color: var(--accent-strong);
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.leaderboard-row.current {
+  background: #fff1db;
+  border-color: #e5c387;
+}
+
+.leaderboard-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-row > span:last-child {
+  color: var(--accent-strong);
+  font-weight: 900;
+}
+
+.leaderboard-rank {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
 }
 
 .quest-row {
@@ -2009,6 +2067,7 @@ select:focus {
 
   .hero-command,
   .workbench-grid,
+  .leaderboard-layout,
   .history-layout,
   .two-column,
   .life-checkin-grid,

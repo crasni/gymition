@@ -167,6 +167,17 @@ export type WeeklyGoalProgress = {
   cardioWorkoutsCompleted: number;
 };
 
+export type LeaderboardEntry = {
+  userId: string;
+  username: string;
+  value: number;
+};
+
+export type LeaderboardState = {
+  checkinStreaks: LeaderboardEntry[];
+  levels: LeaderboardEntry[];
+};
+
 export type GymitionState = {
   user: UserProfile;
   coinLedger: LedgerEntry[];
@@ -179,4 +190,5 @@ export type GymitionState = {
   lifeSummary: LifeSummary;
   weeklyGoal: WeeklyGoal | null;
   weeklyGoalProgress: WeeklyGoalProgress;
+  leaderboard: LeaderboardState;
 };

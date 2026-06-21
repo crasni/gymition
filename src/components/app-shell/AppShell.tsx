@@ -20,7 +20,7 @@ import {
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { levelFromXp, xpForNextLevel } from "@/features/economy/xp-rules";
 
-export type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "profile";
+export type AppView = "dashboard" | "workout" | "history" | "rewards" | "life" | "leaderboard" | "profile";
 
 const navItems = [
   { view: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +28,7 @@ const navItems = [
   { view: "history", href: "/history", label: "History", icon: History },
   { view: "rewards", href: "/rewards", label: "Rewards", icon: Gift },
   { view: "life", href: "/life", label: "Life", icon: HeartPulse },
+  { view: "leaderboard", href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { view: "profile", href: "/profile", label: "Profile", icon: User },
 ] satisfies Array<{
   view: AppView;
@@ -189,5 +190,6 @@ function activeViewLabel(view: AppView) {
   if (view === "history") return "History";
   if (view === "rewards") return "Reward Shop";
   if (view === "life") return "Life Tracker";
+  if (view === "leaderboard") return "Leaderboard";
   return "Profile";
 }
