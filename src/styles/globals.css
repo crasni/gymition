@@ -282,58 +282,72 @@ h2 {
   font-size: 14px;
 }
 
-.page-swap-skeleton {
-  display: grid;
-  gap: 16px;
-  min-height: calc(100vh - 118px);
+.topbar-checkin-streak {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
 }
 
-.skeleton-hero,
-.skeleton-panel {
+.topbar-checkin-streak span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.topbar-checkin-flame {
+  color: #a89a8b;
+  fill: none;
+}
+
+.topbar-checkin-flame.checked {
+  color: var(--accent);
+  fill: var(--accent);
+}
+
+.loading-layout {
+  display: grid;
+  min-height: min(720px, calc(100vh - 118px));
+}
+
+.loading-layout .loading-block,
+.loading-layout .skeleton-row {
   background: #f2f0ed;
   border: 1px solid #e2ded8;
   border-radius: 8px;
-  display: grid;
-  gap: 14px;
+  box-shadow: none;
   overflow: hidden;
-  padding: 22px;
   position: relative;
 }
 
-.skeleton-hero::after,
-.skeleton-panel::after,
-.skeleton-row::after {
+.loading-layout .loading-block::after,
+.loading-layout .skeleton-row::after {
   animation: skeleton-shimmer 1.2s ease-in-out infinite;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.62), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.64), transparent);
   content: "";
   inset: 0;
   position: absolute;
   transform: translateX(-100%);
 }
 
-.skeleton-hero {
-  min-height: 170px;
-}
-
-.skeleton-grid {
-  align-items: start;
+.skeleton-copy,
+.loading-list,
+.loading-action-row {
   display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 10px;
 }
 
-.skeleton-panel.large {
-  min-height: 360px;
-}
-
-.skeleton-panel.side {
-  min-height: 300px;
+.loading-action-row {
+  grid-auto-flow: column;
+  justify-content: end;
 }
 
 .skeleton-line,
-.skeleton-pill,
-.skeleton-dot,
-.skeleton-block {
+.skeleton-mark,
+.skeleton-chip,
+.skeleton-action,
+.skeleton-avatar,
+.skeleton-button,
+.skeleton-meter,
+.skeleton-calendar-day {
   background: #d9d5ce;
   border-radius: 8px;
   display: block;
@@ -342,54 +356,106 @@ h2 {
 .skeleton-line {
   height: 14px;
   max-width: 100%;
-  width: 44%;
 }
 
-.skeleton-line.short {
+.skeleton-line.eyebrow,
+.skeleton-line.label {
   height: 12px;
-  width: 120px;
+  width: min(120px, 42%);
+}
+
+.skeleton-line.heading {
+  height: clamp(28px, 5vw, 42px);
+  width: min(520px, 78%);
 }
 
 .skeleton-line.title {
-  height: 32px;
-  width: min(460px, 72%);
+  height: 20px;
+  width: min(340px, 68%);
 }
 
-.skeleton-line.wide {
+.skeleton-line.body {
   width: min(620px, 88%);
 }
 
-.skeleton-line.mid {
-  width: min(360px, 58%);
+.skeleton-line.metric {
+  height: 26px;
+  width: min(170px, 54%);
 }
 
 .skeleton-row {
   align-items: center;
-  background: #eae7e2;
-  border-radius: 8px;
   display: grid;
   gap: 14px;
-  grid-template-columns: 38px minmax(0, 1fr) 88px;
-  min-height: 74px;
-  overflow: hidden;
-  padding: 16px;
-  position: relative;
+  grid-template-columns: 38px minmax(0, 1fr) minmax(60px, 16%);
+  min-height: clamp(68px, 10vh, 88px);
+  padding: 14px;
 }
 
-.skeleton-dot {
+.loading-dashboard-hero {
+  min-height: clamp(190px, 26vh, 260px);
+}
+
+.loading-status-strip .stat-tile {
+  min-height: 104px;
+}
+
+.loading-table-surface {
+  background: #f2f0ed;
+}
+
+.loading-table-head {
+  border: 0;
+}
+
+.loading-calendar {
+  gap: 18px;
+}
+
+.loading-calendar-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.skeleton-calendar-day {
+  aspect-ratio: 1;
+  min-height: 34px;
+}
+
+.skeleton-mark {
   height: 38px;
   width: 38px;
 }
 
-.skeleton-pill {
+.stat-tile .skeleton-mark {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.skeleton-chip {
   height: 20px;
   justify-self: end;
+  width: min(92px, 100%);
+}
+
+.skeleton-action {
+  height: 62px;
+  min-width: min(100%, 220px);
+}
+
+.skeleton-button {
+  height: 38px;
+  width: 132px;
+}
+
+.skeleton-avatar {
+  height: 88px;
   width: 88px;
 }
 
-.skeleton-block {
-  height: 170px;
-  width: 100%;
+.skeleton-meter {
+  height: 10px;
 }
 
 @keyframes skeleton-shimmer {
@@ -1942,7 +2008,6 @@ select:focus {
   }
 
   .hero-command,
-  .skeleton-grid,
   .workbench-grid,
   .history-layout,
   .two-column,
@@ -1995,16 +2060,11 @@ select:focus {
     font-size: 34px;
   }
 
-  .skeleton-hero,
-  .skeleton-panel {
-    padding: 18px;
-  }
-
   .skeleton-row {
     grid-template-columns: 34px minmax(0, 1fr);
   }
 
-  .skeleton-pill {
+  .skeleton-chip {
     justify-self: start;
   }
 

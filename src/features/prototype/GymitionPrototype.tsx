@@ -699,14 +699,13 @@ export function GymitionPrototype({
       coins={state.user.coins}
       xp={state.user.xp}
       streak={state.user.currentStreak}
+      checkedInToday={state.user.lastLoginRewardDate === localDateKey()}
       username={state.user.username}
       onReset={resetDemo}
       onNavigate={navigateView}
       resetLabel={initialState ? "Refresh data" : "Reset demo data"}
     >
-      {isPageSwapPending ? (
-        <PageSwapSkeleton view={displayView} />
-      ) : null}
+      {isPageSwapPending ? <PageSwapSkeleton view={displayView} /> : null}
 
       {!isPageSwapPending && displayView === "dashboard" && (
         <DashboardView
@@ -821,34 +820,282 @@ export function GymitionPrototype({
   );
 }
 
-function PageSwapSkeleton({ view }: { view: AppView }) {
-  const rowCount = view === "history" || view === "rewards" ? 5 : 3;
+const loadingLayouts = {
+  dashboard: ["dashboardHero", "statusStrip", "workbench"],
+  workout: ["workoutToolbar", "workoutList"],
+  history: ["historyList"],
+  rewards: ["shop"],
+  life: ["lifeHero", "lifeCheckins", "lifeCalendar"],
+  profile: ["profileHero", "profileStats", "profileInventory"],
+} satisfies Record<AppView, LoadingBlockKind[]>;
 
+type LoadingBlockKind =
+  | "dashboardHero"
+  | "statusStrip"
+  | "workbench"
+  | "workoutToolbar"
+  | "workoutList"
+  | "historyList"
+  | "shop"
+  | "lifeHero"
+  | "lifeCheckins"
+  | "lifeCalendar"
+  | "profileHero"
+  | "profileStats"
+  | "profileInventory";
+
+function PageSwapSkeleton({ view }: { view: AppView }) {
   return (
-    <section className={`page-swap-skeleton ${view}`} aria-label="Loading page" aria-busy="true">
-      <div className="skeleton-hero">
-        <span className="skeleton-line short" />
-        <span className="skeleton-line title" />
-        <span className="skeleton-line wide" />
+    <div className={`loading-layout ${loadingSurfaceClass(view)}`} aria-label="Loading page" aria-busy="true">
+      {loadingLayouts[view].map((kind) => (
+        <LoadingBlock kind={kind} key={kind} />
+      ))}
+    </div>
+  );
+}
+
+function LoadingBlock({ kind }: { kind: LoadingBlockKind }) {
+  if (kind === "dashboardHero") {
+    return (
+      <section className="hero-command loading-block loading-dashboard-hero">
+        <div className="hero-copy skeleton-copy">
+          <SkeletonLine size="heading" />
+          <SkeletonLine size="body" />
+        </div>
+        <div className="hero-actions">
+          <SkeletonAction />
+          <SkeletonAction />
+        </div>
+      </section>
+    );
+  }
+
+  if (kind === "statusStrip") {
+    return (
+      <section className="status-strip loading-status-strip" aria-hidden>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <SkeletonStatTile key={index} />
+        ))}
+      </section>
+    );
+  }
+
+  if (kind === "workbench") {
+    return (
+      <div className="workbench-grid" aria-hidden>
+        <div className="workbench-main">
+          <SkeletonPanel rows={2} />
+          <SkeletonPanel rows={3} />
+        </div>
+        <aside className="today-rail">
+          <SkeletonPanel rows={4} />
+        </aside>
       </div>
-      <div className="skeleton-grid">
-        <div className="skeleton-panel large">
-          {Array.from({ length: rowCount }).map((_, index) => (
-            <div className="skeleton-row" key={index}>
-              <span className="skeleton-dot" />
-              <span className="skeleton-line mid" />
-              <span className="skeleton-pill" />
-            </div>
+    );
+  }
+
+  if (kind === "workoutToolbar") {
+    return (
+      <section className="workout-toolbar loading-block" aria-hidden>
+        <span className="skeleton-copy">
+          <SkeletonLine size="eyebrow" />
+          <SkeletonLine size="title" />
+        </span>
+        <span className="loading-action-row">
+          <SkeletonAction />
+          <SkeletonAction />
+        </span>
+      </section>
+    );
+  }
+
+  if (kind === "workoutList") {
+    return (
+      <section className="workout-list-surface loading-table-surface" aria-hidden>
+        <div className="workout-list-head loading-table-head">
+          <SkeletonLine size="label" />
+          <SkeletonLine size="label" />
+          <SkeletonLine size="label" />
+          <span />
+        </div>
+        <div className="entry-list workout-entry-list loading-list">
+          <SkeletonRows count={3} />
+        </div>
+        <div className="workout-footer loading-block">
+          <SkeletonLine size="body" />
+          <span className="skeleton-button" />
+        </div>
+      </section>
+    );
+  }
+
+  if (kind === "historyList") {
+    return (
+      <section className="history-list-surface loading-block loading-list" aria-hidden>
+        <SkeletonPanelHeader />
+        <SkeletonRows count={5} />
+      </section>
+    );
+  }
+
+  if (kind === "shop") {
+    return (
+      <section className="shop-container" aria-hidden>
+        <div className="shop-head loading-block">
+          <SkeletonPanelHeader />
+          <span className="skeleton-chip" />
+        </div>
+        <div className="shop-list loading-list">
+          <SkeletonRows count={5} />
+        </div>
+      </section>
+    );
+  }
+
+  if (kind === "lifeHero") {
+    return (
+      <section className="life-hero loading-block" aria-hidden>
+        <span className="skeleton-copy">
+          <SkeletonLine size="eyebrow" />
+          <SkeletonLine size="title" />
+          <SkeletonLine size="body" />
+        </span>
+        <div className="life-scoreboard">
+          <SkeletonStatTile />
+          <SkeletonStatTile />
+        </div>
+      </section>
+    );
+  }
+
+  if (kind === "lifeCheckins") {
+    return (
+      <section className="life-checkin-grid" aria-hidden>
+        <SkeletonCheckinCard />
+        <SkeletonCheckinCard />
+      </section>
+    );
+  }
+
+  if (kind === "lifeCalendar") {
+    return (
+      <section className="life-calendar-panel loading-block loading-calendar" aria-hidden>
+        <SkeletonPanelHeader />
+        <div className="loading-calendar-grid">
+          {Array.from({ length: 35 }).map((_, index) => (
+            <span className="skeleton-calendar-day" key={index} />
           ))}
         </div>
-        <div className="skeleton-panel side">
-          <span className="skeleton-line short" />
-          <span className="skeleton-line title" />
-          <span className="skeleton-block" />
-        </div>
-      </div>
+      </section>
+    );
+  }
+
+  if (kind === "profileHero") {
+    return (
+      <section className="profile-hero loading-block" aria-hidden>
+        <span className="skeleton-avatar" />
+        <span className="player-identity skeleton-copy">
+          <SkeletonLine size="eyebrow" />
+          <SkeletonLine size="heading" />
+          <SkeletonLine size="body" />
+        </span>
+        <span className="skeleton-button" />
+      </section>
+    );
+  }
+
+  if (kind === "profileStats") {
+    return (
+      <section className="profile-progression loading-block" aria-hidden>
+        <SkeletonPanelHeader />
+        <span className="profile-level-meter">
+          <SkeletonLine size="label" />
+          <span className="skeleton-meter" />
+        </span>
+      </section>
+    );
+  }
+
+  return (
+    <section className="profile-inventory loading-block loading-list" aria-hidden>
+      <SkeletonPanelHeader />
+      <SkeletonRows count={4} />
     </section>
   );
+}
+
+function loadingSurfaceClass(view: AppView) {
+  if (view === "dashboard") return "home-layout";
+  if (view === "workout") return "workout-layout";
+  if (view === "history") return "history-layout";
+  if (view === "rewards") return "shop-container";
+  if (view === "life") return "life-layout";
+  return "player-profile";
+}
+
+function SkeletonRows({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <div className="skeleton-row" key={index}>
+          <span className="skeleton-mark" />
+          <span className="skeleton-copy">
+            <SkeletonLine size="title" />
+            <SkeletonLine size="body" />
+          </span>
+          <span className="skeleton-chip" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function SkeletonPanel({ rows }: { rows: number }) {
+  return (
+    <section className="activity-panel loading-block loading-list" aria-hidden>
+      <SkeletonPanelHeader />
+      <SkeletonRows count={rows} />
+    </section>
+  );
+}
+
+function SkeletonPanelHeader() {
+  return (
+    <span className="skeleton-copy">
+      <SkeletonLine size="eyebrow" />
+      <SkeletonLine size="title" />
+    </span>
+  );
+}
+
+function SkeletonStatTile() {
+  return (
+    <div className="stat-tile loading-block" aria-hidden>
+      <span className="skeleton-mark" />
+      <SkeletonLine size="label" />
+      <SkeletonLine size="metric" />
+    </div>
+  );
+}
+
+function SkeletonAction() {
+  return <span className="skeleton-action" />;
+}
+
+function SkeletonCheckinCard() {
+  return (
+    <div className="life-checkin-card loading-block">
+      <span className="skeleton-mark" />
+      <span className="skeleton-copy">
+        <SkeletonLine size="title" />
+        <SkeletonLine size="body" />
+      </span>
+    </div>
+  );
+}
+
+function SkeletonLine({ size }: { size: "eyebrow" | "heading" | "title" | "body" | "label" | "metric" }) {
+  return <span className={`skeleton-line ${size}`} />;
 }
 
 function StreakCelebration({
@@ -941,10 +1188,10 @@ function DashboardView({
           <button className="daily-reward-row" type="button" onClick={onClaimDailyReward} disabled={dailyClaimed}>
             <Gift size={20} aria-hidden />
             <span>
-              <strong>{dailyClaimed ? "Daily reward claimed" : "Claim daily reward"}</strong>
+              <strong>{dailyClaimed ? "Checked in today" : "Check in today"}</strong>
               <small>
                 {dailyClaimed
-                  ? "Come back tomorrow to keep the check-in streak alive"
+                  ? "Checked in today. Come back tomorrow to keep the streak alive"
                   : `+${REWARD_RULES.dailyLogin.coins} coins, +${REWARD_RULES.dailyLogin.xp} XP`}
               </small>
             </span>

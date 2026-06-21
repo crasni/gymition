@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Dumbbell,
   Gift,
+  Flame,
   HeartPulse,
   History,
   LayoutDashboard,
@@ -40,6 +41,7 @@ export function AppShell({
   coins,
   xp,
   streak,
+  checkedInToday,
   username,
   onReset,
   onNavigate,
@@ -50,6 +52,7 @@ export function AppShell({
   coins: number;
   xp: number;
   streak: number;
+  checkedInToday: boolean;
   username: string;
   onReset: () => void;
   onNavigate?: (view: AppView, href: string) => void;
@@ -164,7 +167,14 @@ export function AppShell({
           <div className="topbar-stats" aria-label="Current player status">
             <span>{username}</span>
             <strong>{coins} coins</strong>
-            <span>{streak} day check-in streak</span>
+            <span className="topbar-checkin-streak" title={`${streak} day check-in streak`}>
+              <Flame
+                className={checkedInToday ? "topbar-checkin-flame checked" : "topbar-checkin-flame"}
+                size={18}
+                aria-hidden
+              />
+              <span>{streak} days</span>
+            </span>
           </div>
         </header>
         {children}
